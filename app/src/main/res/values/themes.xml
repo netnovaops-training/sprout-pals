@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.SproutPals" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#2E5E3A</item>
+        <item name="android:statusBarColor">#2E5E3A</item>
+        <item name="android:navigationBarColor">#2E5E3A</item>
+    </style>
+</resources>

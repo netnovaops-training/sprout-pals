@@ -1,0 +1,23 @@
+# Authored on Windows, built on macOS and Linux. Without this, git's
+# autocrlf turns checked-out text files into CRLF, and a CRLF shell script
+# fails on a Unix runner with "bad interpreter: No such file or directory"
+# -- an error that names the interpreter and not the real cause, which is
+# why it is worth pinning rather than discovering.
+* text=auto eol=lf
+
+# Must stay LF no matter what: these are executed as scripts.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Must stay CRLF: Windows refuses to run a .bat with LF endings reliably.
+gradlew.bat text eol=crlf
+*.bat text eol=crlf
+
+# Binary. Never touch these, never try to diff them as text.
+*.jar binary
+*.webp binary
+*.png binary
+*.apk binary
+*.ipa binary
+*.keystore binary
+*.jks binary

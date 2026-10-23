@@ -1,0 +1,26 @@
+# --- Android ---
+*.iml
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+# sdk.dir is this machine's path, nobody else's.
+local.properties
+
+# --- keys and secrets ---
+*.keystore
+*.jks
+*.p12
+.env
+.env.*
+
+# --- editor / OS noise ---
+.idea/
+.DS_Store
+Thumbs.db
+.kotlin/
+
+# --- server ---
+server/target/
+server/*.db
