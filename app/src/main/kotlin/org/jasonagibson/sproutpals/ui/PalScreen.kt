@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import org.jasonagibson.sproutpals.app.Chiptune
 import org.jasonagibson.sproutpals.app.Game
 import org.jasonagibson.sproutpals.app.Panel
+import org.jasonagibson.sproutpals.engine.Achievements
 import org.jasonagibson.sproutpals.engine.FruitCatch
 import org.jasonagibson.sproutpals.engine.Garden
 import org.jasonagibson.sproutpals.engine.PlotState
@@ -144,6 +145,7 @@ fun PalScreen(
                 @Suppress("UNUSED_VARIABLE") val tick = game.frame
                 Canvas(Modifier.fillMaxSize()) { drawLcd(game) }
                 PanelOverlay(game)
+                game.toast?.let { ToastBanner(it) }
             }
         }
 
@@ -287,7 +289,12 @@ private fun PanelOverlay(game: Game) {
         }
         is Panel.Status -> statusPage(game, p.page) +
             if (game.pet.stage == Stage.EGG) "\n\nC: CLOSE"
-            else "\n\n${p.page + 1}/${Game.STATUS_PAGES}  " + if (p.page + 1 >= Game.STATUS_PAGES) "B: DONE" else "B: NEXT  C: CLOSE"
+            else "\n\n${p.page + 1}/${Game.STATUS_PAGES}  " + when {
+                p.page >= Game.PAGE_TROPHIES -> if (p.page + 1 >= Game.STATUS_PAGES) "C: CLOSE" else "A: NEXT  C: CLOSE"
+                else -> "B: NEXT  C: CLOSE"
+            }
+        is Panel.Trophies -> { TrophyCard(game, p); return }
+        is Panel.Book -> { BookCard(game, p); return }
         is Panel.PlayMenu -> "LET'S PLAY!\n\n" + MiniGame.NAMES.mapIndexed { i, n -> (if (i == p.choice) "> " else "  ") + n }.joinToString("\n") +
             "\n\nA: NEXT  B: PICK"
         is Panel.HowTo -> HOW_TO[p.game] + "\n\nB: START  C: BACK"
@@ -377,7 +384,12 @@ private fun statusPage(game: Game, page: Int): String {
             if (next == null) "WALKED ${"%.0f".format(Route.miles(steps))} MI\n\nEVERY SHOP\nVISITED!"
             else "NEXT STOP\n${next.name.uppercase()}\n${next.town.uppercase()}\n\n${"%.1f".format(Route.milesToNext(steps))} MI TO GO"
         }
-        else -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\n" + weatherLine(game) + "\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
+        4 -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\n" + weatherLine(game) + "\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
+        Game.PAGE_TROPHIES -> {
+            val (got, of) = Achievements.progress(game.save)
+            "🏆 TROPHIES\n\n$got OF $of\nMEDALS EARNED\n\nB: OPEN THE LIST"
+        }
+        else -> "📖 MEMORY BOOK\n\n${game.save.memories.size} PAL${if (game.save.memories.size == 1) "" else "S"}\nREMEMBERED\n\nB: OPEN THE BOOK"
     }
 }
 

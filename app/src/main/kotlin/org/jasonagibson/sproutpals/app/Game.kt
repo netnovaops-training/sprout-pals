@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.jasonagibson.sproutpals.engine.Achievements
 import org.jasonagibson.sproutpals.engine.Garden
 import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.PlotState
@@ -52,6 +53,10 @@ sealed interface Panel {
     data class Friends(val choice: Int = 0, val friend: String? = null, val note: String = "") : Panel
     /** The garden bed: A next plot, B plant / water / harvest, C close. [picking] = choosing a seed. */
     data class Garden(val plot: Int = 0, val picking: Boolean = false, val seed: Int = 0, val note: String = "") : Panel
+    /** The trophy list, scrolled by A. */
+    data class Trophies(val top: Int = 0) : Panel
+    /** The memory book: one past pal per page, A turns the page. */
+    data class Book(val page: Int = 0) : Panel
     /** Pick a game: A next, B start, C back. */
     data class PlayMenu(val choice: Int = 0) : Panel
     /** "How to play" card for the chosen game; B starts it. */
@@ -123,9 +128,12 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         moving = petX != beforeX
 
         checkHome()
+        runToasts(realNow)
         // the garden creatures' hour: perks, mischief, and the news of it
         val (visited, news) = Visitors.catchUp(save, now(), zone, rng)
+        val weatherBegan = visited.weather?.started == true && save.weather?.started != true
         if (visited != save) commit(visited)
+        if (weatherBegan) count("weather")
         if (news.isNotEmpty() && panel == Panel.None && mini == null) {
             show(news.takeLast(2).joinToString("\n\n"), 3500)
         }
@@ -137,12 +145,16 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             if (before.stage != after.stage && after.ended == null) {
                 show("${after.species.title.uppercase()}\nGREW UP!", 3000)
             }
-            if (after.ended != null && save.memories.none { it.bornAt == after.bornAt }) {
-                val bonus = if (after.ended == org.jasonagibson.sproutpals.engine.EndReason.NATURAL) Rules.POINTS_FULL_LIFE else 0
+            val fullLife = after.ended == org.jasonagibson.sproutpals.engine.EndReason.NATURAL
+            val newMemory = after.ended != null && save.memories.none { it.bornAt == after.bornAt }
+            if (newMemory) {
+                val bonus = if (fullLife) Rules.POINTS_FULL_LIFE else 0
                 s = s.copy(memories = s.memories + PetEngine.memoryOf(after), points = s.points + bonus)
                 panel = Panel.Ended
             }
             commit(s)
+            if (before.stage != after.stage && after.ended == null && before.stage != Stage.EGG) count("birthday")
+            if (newMemory && fullLife) count("full_life")
         }
     }
 
@@ -231,6 +243,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             val name = after.species.title.uppercase()
             onSound(Chiptune.Sfx.HATCH)
             show(if (after.species.rare) "★ RARE! ★\nIT'S $name!" else "IT HATCHED!\nIT'S $name!", 4000)
+            count("hatch")
+            if (after.species.rare) keyItem("✨", "A RARE $name HATCHED!")
         }
     }
 
@@ -245,7 +259,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             val stop = arrived.last()
             show("YOU WALKED TO\n${stop.name.uppercase()}!\n\nFOUND:\n${stop.prize.uppercase()}", 6000)
             onArrive(arrived)
-            onSound(Chiptune.Sfx.ARRIVE)
+            arrived.forEach { keyItem("👟", it.prize.uppercase()) }   // the key-item fanfare plays for each prize
+            count("stop", arrived.size)
         }
     }
 
@@ -339,6 +354,16 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         panel = Panel.GameOver(
             "${g.result}\n\n+$earned ★" + if (happier) "\n+1 ♥" else "",
         )
+        count("play")
+        count(
+            when (g) {
+                is org.jasonagibson.sproutpals.engine.FruitCatch -> "game_fruit"
+                is org.jasonagibson.sproutpals.engine.JumpRope -> "game_rope"
+                is org.jasonagibson.sproutpals.engine.TicTacToe -> "game_ttt"
+                is org.jasonagibson.sproutpals.engine.HigherLower -> "game_hilo"
+                else -> "play_other"
+            },
+        )
     }
 
     /** A: next icon, or next choice inside a panel. */
@@ -357,6 +382,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 else p.copy(plot = (p.plot + 1) % Garden.PLOTS, note = "")
             // last page: A or B closes instead of looping back to the first (C closes any time)
             is Panel.Status -> panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1)
+            is Panel.Trophies -> panel = p.copy(top = (p.top + TROPHY_ROWS).let { if (it >= Achievements.ALL.size) 0 else it })
+            is Panel.Book -> if (save.memories.isNotEmpty()) panel = p.copy(page = (p.page + 1) % save.memories.size)
             Panel.None -> selected = (selected + 1) % MenuItem.entries.size
             else -> Unit
         }
@@ -380,7 +407,16 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             }
             is Panel.Garden -> { gardenPress(p); return false }
             is Panel.Friends -> { friendsPress(p); return false }
-            is Panel.Status -> { panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1); return false }
+            is Panel.Status -> {
+                panel = when {
+                    p.page == PAGE_TROPHIES -> Panel.Trophies()
+                    p.page == PAGE_BOOK -> Panel.Book()
+                    p.page + 1 >= STATUS_PAGES -> Panel.None
+                    else -> p.copy(page = p.page + 1)
+                }
+                return false
+            }
+            is Panel.Trophies, is Panel.Book -> { panel = Panel.None; return false }
             Panel.Ended -> { newEgg(); return false }
             is Panel.Update -> return p.progress == null
             Panel.None -> Unit
@@ -391,6 +427,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             MenuItem.FEED -> panel = if (canInteract()) Panel.Feed() else blocked()
             MenuItem.LIGHT -> {
                 commit(save.copy(pet = PetEngine.toggleLights(pet)))
+                if (pet.sleeping && !pet.lightsOn) count("lights_off")
                 show(if (pet.lightsOn) "LIGHTS ON" else "LIGHTS OFF", 1200)
             }
             MenuItem.PLAY -> panel = if (canInteract()) Panel.PlayMenu() else blocked()
@@ -428,7 +465,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val choice = p.choice.coerceAtMost(left - 1)
         val wear = item.tab == ShopTab.OUTFITS
         val note = when (result) {
-            ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN YOUR GARDEN" }
+            ShopResult.BOUGHT -> {
+                onSound(Chiptune.Sfx.ARRIVE)
+                if (!item.repeatable) { count("buy"); count("own:${item.id}") }
+                if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN YOUR GARDEN"
+            }
             ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
             ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
             ShopResult.TOO_POOR -> "NEED ${item.price - save.points} MORE ★"
@@ -447,6 +488,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (p.picking) {
             val crop = Garden.CROPS[p.seed]
             commit(Garden.plant(save, p.plot, crop.id, now))
+            count("plant")
             onSound(Chiptune.Sfx.C)
             panel = p.copy(picking = false, note = "PLANTED!\nNOW WATER IT")
             helpInGarden()
@@ -457,6 +499,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             PlotState.EMPTY -> p.copy(picking = true, note = "")
             PlotState.DRY, PlotState.GROWING -> {
                 commit(Garden.water(save, p.plot, now))
+                if (Garden.wetMinutes(save, now) > 0) count("water")
                 onSound(Chiptune.Sfx.C)
                 helpInGarden()
                 val wet = Garden.wetMinutes(save, now)
@@ -469,6 +512,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 commit(next)
                 onSound(Chiptune.Sfx.ARRIVE)
                 helpInGarden()
+                count("harvest")
                 p.copy(note = "+${next.points - before} ★!\n${crop.name} TO THE PANTRY")
             }
         }
@@ -487,6 +531,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         when (outcome) {
             Outcome.OK -> {
                 commit(rest.copy(pet = after))
+                count("harvest_meal")
                 panel = Panel.None
                 play(Effect.MEAL)
                 show("YUM! ${crop.name}", 1200)
@@ -524,6 +569,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                     else -> Unit
                 }
                 commit(save.copy(pet = after, points = save.points + earned))
+                when (fx) {
+                    Effect.MEAL -> count("meal")
+                    Effect.SNACK -> count("snack")
+                    Effect.CLEAN -> count("clean")
+                    Effect.PILL -> if (before.sick && !after.sick) count("cure")
+                    else -> Unit
+                }
                 panel = Panel.None
                 play(fx)
                 if (fx == Effect.PILL) show(if (after.sick) "ONE MORE DOSE" else "ALL BETTER!", 1500)
@@ -551,6 +603,34 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         commit(save.copy(pet = PetEngine.newPet(now(), rng, Shop.rarePercent(save))))
         panel = Panel.None
         selected = -1
+    }
+
+    // ---------- achievements and key items ----------
+
+    /** A banner that slides in at the top without blocking play. [key] = key item (gold style). */
+    data class Toast(val icon: String, val title: String, val line: String, val key: Boolean = false)
+    var toast by mutableStateOf<Toast?>(null); private set
+    private val toastQueue = ArrayDeque<Toast>()
+    private var toastUntil = 0L
+
+    /** Counts something the player did; celebrates any tier reached. */
+    fun count(key: String, by: Int = 1) {
+        val (s, unlocks) = Achievements.record(save, key, by)
+        if (s != save) commit(s)
+        unlocks.forEach { u -> toastQueue += Toast(u.feat.icon, "${u.medal} ACHIEVEMENT!", "${u.feat.name}${if (u.feat.tiers.size > 1) " ×${u.feat.tiers[u.tier]}" else ""}  +${u.stars} ★") }
+    }
+
+    /** A key item picked up: the bigger fanfare. */
+    fun keyItem(icon: String, name: String) { toastQueue += Toast(icon, "🗝 KEY ITEM!", name, key = true) }
+
+    /** Shows queued banners one after another, each with its jingle. */
+    private fun runToasts(realNow: Long) {
+        if (toast != null && realNow < toastUntil) return
+        toast = toastQueue.removeFirstOrNull()
+        toast?.let {
+            toastUntil = realNow + if (it.key) 4_000 else 3_000
+            onSound(if (it.key) Chiptune.Sfx.KEY_ITEM else Chiptune.Sfx.ACHIEVE)
+        }
     }
 
     // ---------- visits ----------
@@ -583,13 +663,14 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             what > 0 && away -> panel = p.copy(note = "YOUR PAL IS ALREADY\nOUT VISITING")
             what > 0 && (pet.stage == Stage.EGG || pet.ended != null) -> panel = p.copy(note = "NOBODY TO SEND YET")
             what > 0 -> { onVisitOut(p.friend, what); panel = p.copy(note = "PACKING A BAG...") }
-            else -> { onHeartOut(p.friend, if (what == 0) "hi!" else "miss you"); panel = p.copy(note = "♥ SENT!") }
+            else -> { onHeartOut(p.friend, if (what == 0) "hi!" else "miss you"); panel = p.copy(note = "♥ SENT!"); count("heart") }
         }
     }
 
     /** The server said yes: our pal is off to [host]'s garden until [untilMs]. */
     fun visitStarted(host: String, untilMs: Long) {
         commit(save.copy(awayHost = host, awayUntil = untilMs))
+        count("visit")
         onSound(Chiptune.Sfx.ARRIVE)
         panel = Panel.None
         show("OFF TO $host'S\nGARDEN! BACK IN\n${((untilMs - System.currentTimeMillis()) / Rules.HOUR + 1)}H", 2500)
@@ -612,6 +693,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             if (panel == Panel.None) show("${fresh.first().code}'S ${fresh.first().species} CAME\nTO VISIT! +1 ♥", 3000)
         }
         if (s != save) commit(s)
+        if (fresh.isNotEmpty()) count("host", fresh.size)
     }
 
     /** Home again: a heart and some stars for the trip. */
@@ -639,7 +721,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     }
 
     companion object {
-        const val STATUS_PAGES = 5
+        const val STATUS_PAGES = 7
+        /** The last two Status pages open the trophy list and the memory book. */
+        const val PAGE_TROPHIES = 5
+        const val PAGE_BOOK = 6
+        const val TROPHY_ROWS = 6
         /** Stars for coming home from a visit. */
         const val VISIT_STARS = 3
         /** Screen pixels left/right of home the pet may roam (sprites are 32 wide on a 96-wide screen). */

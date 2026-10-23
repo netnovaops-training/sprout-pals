@@ -16,7 +16,7 @@ class Chiptune {
     private val worker = Executors.newSingleThreadExecutor()
     private var music: AudioTrack? = null
 
-    enum class Sfx { A, B, C, SHOP, HATCH, ARRIVE }
+    enum class Sfx { A, B, C, SHOP, HATCH, ARRIVE, ACHIEVE, KEY_ITEM }
 
     fun play(sfx: Sfx) {
         val notes: List<Pair<Int, Int>> = when (sfx) {           // (midi note, milliseconds)
@@ -26,6 +26,10 @@ class Chiptune {
             Sfx.SHOP -> listOf(84 to 50, 88 to 50, 91 to 90)       // ka-ching
             Sfx.HATCH -> listOf(72 to 90, 76 to 90, 79 to 90, 84 to 240)
             Sfx.ARRIVE -> listOf(79 to 80, 84 to 80, 88 to 80, 91 to 80, 96 to 300)
+            // achievement: a quick bright arpeggio that lands and rings (original)
+            Sfx.ACHIEVE -> listOf(72 to 70, 76 to 70, 79 to 70, 84 to 90, 0 to 40, 88 to 360)
+            // key item: slower and grander, rising then resolving home (original)
+            Sfx.KEY_ITEM -> listOf(67 to 130, 72 to 130, 76 to 130, 79 to 220, 77 to 110, 81 to 110, 84 to 560)
         }
         worker.execute {
             val pcm = render(notes.map { (n, ms) -> Voice(n, ms, 0.25, 0.30) }, sequential = true)

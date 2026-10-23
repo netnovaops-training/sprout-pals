@@ -124,6 +124,9 @@ data class Save(
     val awayUntil: Long = 0,
     /** Visits already welcomed ("code@until"), so each arrival is celebrated once. */
     val welcomed: List<String> = emptyList(),
+    /** Achievements: how many times each thing was done, and the tiers earned ("key#tier"). */
+    val counts: Map<String, Int> = emptyMap(),
+    val achieved: List<String> = emptyList(),
     /** Phone notifications already sent and not yet dealt with (see Reminders). */
     val notified: List<String> = emptyList(),
     /** Times the last creature-page item was bought. */

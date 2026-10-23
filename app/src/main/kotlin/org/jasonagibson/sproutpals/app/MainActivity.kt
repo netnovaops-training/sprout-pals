@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
             g.friendsNote = when (val r = friendsApi.addFriend(token, code)) {
                 is Friends.Reply.Ok -> {
                     (friendsApi.friends(token) as? Friends.Reply.Ok)?.let { g.friendList = it.value }
+                    g.count("friend")
                     "Added ${r.value.code}! Your gardens are connected."
                 }
                 is Friends.Reply.Fail -> r.message
