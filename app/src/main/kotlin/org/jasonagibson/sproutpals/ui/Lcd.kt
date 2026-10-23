@@ -194,6 +194,8 @@ fun DrawScope.drawLcd(game: Game) {
 
     // ----- a mini-game takes over the garden while it runs -----
     val playing = game.mini
+    // shop visitors on the ground and fence stand behind the pet
+    if (playing == null && !dark) drawBackCritters(game.save, f, AREA_TOP, GROUND, px)
     if (playing != null) drawMiniGame(playing, pet, f, AREA_TOP, GROUND, px)
 
     // ----- the garden bed: the pet plants a seedling here when it feels like gardening -----
@@ -262,6 +264,9 @@ fun DrawScope.drawLcd(game: Game) {
             val by = GROUND - 4 - listOf(0, 4, 7, 9, 11, 12, 12, 11, 9, 7, 4, 0, 0, 2, 3, 2)[t % 16]
             block(bx, by, 4, 4, 0xFFE0344B, px); block(bx + 1, by + 1, 2, 2, 0xFFFF8A9A, px)
         }
+
+        // shop visitors that fly: in front of the pet, around its head
+        drawFrontCritters(game.save, f, AREA_TOP, GROUND, px, box.centerX.toInt(), by, night = sky == Sky.NIGHT || sky == Sky.SUNSET)
 
         if (game.birthdaySoon && !pet.sleeping) {
             // party hat on top of the head, and a little confetti

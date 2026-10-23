@@ -99,8 +99,12 @@ data class Save(
     val stepRemainder: Int = 0,
     /** Garden shops reached on the walking route (see [Route]). Carries over between lives. */
     val stopsReached: Int = 0,
-    /** Cosmetics collected (prize ids). Worn ones will show on friends' screens too. */
+    /** Things collected: walking-route prizes and shop items (ids). */
     val unlocked: List<String> = emptyList(),
+    /** Owned shop items the player has hidden from the garden. */
+    val hidden: List<String> = emptyList(),
+    /** Easter egg (hold SHOP): the day number it last paid out, so it pays once a day. */
+    val secretDay: Long = -1,
     /** Button beeps and jingles. */
     val soundOn: Boolean = true,
     /** 8-bit background tune. */

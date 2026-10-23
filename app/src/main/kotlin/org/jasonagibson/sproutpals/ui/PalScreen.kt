@@ -43,6 +43,7 @@ import org.jasonagibson.sproutpals.engine.HigherLower
 import org.jasonagibson.sproutpals.engine.JumpRope
 import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.Route
+import org.jasonagibson.sproutpals.engine.Shop
 import org.jasonagibson.sproutpals.engine.TicTacToe
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
@@ -145,7 +146,7 @@ fun PalScreen(
             Spacer(Modifier.size(10.dp))
             PillButton("C", BTN_C, onLong = { if (debug) game.debugBirthday() }) { game.onSound(Chiptune.Sfx.C); game.pressC() }
             Spacer(Modifier.weight(1f))
-            PillButton("SHOP", BTN_SHOP, small = true) { game.onSound(Chiptune.Sfx.SHOP); game.pressShop() }
+            PillButton("SHOP", BTN_SHOP, small = true, onLong = { game.secretPoints(debug) }) { game.onSound(Chiptune.Sfx.SHOP); game.pressShop() }
         }
         BasicText(
             "A next   B choose   C back",
@@ -271,7 +272,16 @@ private fun PanelOverlay(game: Game) {
             "\n\nA: NEXT  B: PICK"
         is Panel.HowTo -> HOW_TO[p.game] + "\n\nB: START  C: BACK"
         is Panel.GameOver -> p.text + "\n\nB: PLAY AGAIN\nC: DONE"
-        Panel.Shop -> "SHOP\nOPENS SOON!\n\nPOINTS: ${game.save.points}"
+        is Panel.Shop -> {
+            val item = Shop.ITEMS[p.choice]
+            val state = when {
+                !Shop.owns(game.save, item.id) -> "${item.price} POINTS · B: BUY"
+                Shop.showing(game.save, item.id) -> "OWNED · B: HIDE"
+                else -> "OWNED · B: SHOW"
+            }
+            "SHOP   ★ ${game.save.points} PTS\n\n${p.choice + 1}/${Shop.ITEMS.size}  ${item.name}\n${item.blurb}\n\n$state" +
+                (if (p.note.isNotBlank()) "\n\n${p.note}" else "") + "\n\nA: NEXT  C: CLOSE"
+        }
         Panel.Garden -> "GARDEN\nCOMING SOON!\n\nPLANT, GROW,\nHARVEST"
         Panel.Ended -> {
             val pet = game.pet

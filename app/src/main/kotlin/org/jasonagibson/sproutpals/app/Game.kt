@@ -12,6 +12,8 @@ import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Save
 import org.jasonagibson.sproutpals.engine.Stage
 import org.jasonagibson.sproutpals.engine.Route
+import org.jasonagibson.sproutpals.engine.Shop
+import org.jasonagibson.sproutpals.engine.ShopResult
 import org.jasonagibson.sproutpals.engine.Steps
 import org.jasonagibson.sproutpals.engine.Stop
 import org.jasonagibson.sproutpals.engine.Walk
@@ -34,7 +36,8 @@ sealed interface Panel {
     data class Feed(val choice: Int = 0) : Panel
     data class Status(val page: Int = 0) : Panel
     data class Message(val text: String) : Panel
-    data object Shop : Panel
+    /** The shop, one item at a time: A next, B buy (or show/hide if owned), C close. */
+    data class Shop(val choice: Int = 0, val note: String = "") : Panel
     data object Garden : Panel
     /** Pick a game: A next, B start, C back. */
     data class PlayMenu(val choice: Int = 0) : Panel
@@ -249,6 +252,22 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** Set by the activity: buzz + notification when a garden shop is reached. */
     var onArrive: (List<Stop>) -> Unit = {}
 
+    /**
+     * Easter egg (Jason, 10-23): hold the SHOP button. Pays 50 points once a day; ask again the
+     * same day and it just winks. Not mentioned anywhere in the app. Debug builds: every time.
+     */
+    fun secretPoints(debug: Boolean) {
+        if (mini != null || panel is Panel.Ended) return
+        val today = java.time.LocalDate.now(zone).toEpochDay()
+        if (!debug && save.secretDay == today) {
+            show("★ ;) ★\nCOME BACK\nTOMORROW", 2000)
+            return
+        }
+        commit(save.copy(points = save.points + 50, secretDay = today))
+        onSound(Chiptune.Sfx.ARRIVE)
+        show("★ A SECRET! ★\n+50 POINTS", 2500)
+    }
+
     /** Debug builds (long-press A): pretend you've been walking for 3 minutes. */
     fun debugWalk() {
         val t = System.currentTimeMillis()
@@ -305,6 +324,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         mini?.let { it.a(); return }
         when (val p = panel) {
             is Panel.PlayMenu -> panel = p.copy(choice = (p.choice + 1) % MiniGame.NAMES.size)
+            is Panel.Shop -> panel = Panel.Shop(choice = (p.choice + 1) % Shop.ITEMS.size)
             is Panel.Feed -> panel = p.copy(choice = (p.choice + 1) % 2)
             // last page: A or B closes instead of looping back to the first (C closes any time)
             is Panel.Status -> panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1)
@@ -318,6 +338,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         mini?.let { it.b(); return false }
         when (val p = panel) {
             is Panel.PlayMenu -> { panel = Panel.HowTo(p.choice); return false }
+            is Panel.Shop -> { shopPress(p); return false }
             is Panel.HowTo -> { startGame(p.game); return false }
             is Panel.GameOver -> { panel = Panel.PlayMenu(); return false }   // B: play again
             is Panel.Feed -> { if (p.choice == 0) care(PetEngine::feedMeal, Effect.MEAL) else care(PetEngine::feedSnack, Effect.SNACK); return false }
@@ -351,7 +372,20 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (panel != Panel.None) panel = Panel.None else selected = -1
     }
 
-    fun pressShop() { if (mini == null && panel !is Panel.Ended && panel !is Panel.Update) panel = Panel.Shop }
+    fun pressShop() { if (mini == null && panel !is Panel.Ended && panel !is Panel.Update) panel = Panel.Shop() }
+
+    private fun shopPress(p: Panel.Shop) {
+        val item = Shop.ITEMS[p.choice]
+        val (next, result) = Shop.press(save, item)
+        commit(next)
+        val note = when (result) {
+            ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); "YOURS! IT'S IN\nYOUR GARDEN" }
+            ShopResult.SHOWN -> "BACK IN THE GARDEN"
+            ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
+            ShopResult.TOO_POOR -> "NEED ${item.price - save.points}\nMORE POINTS"
+        }
+        panel = p.copy(note = note)
+    }
 
     // ---------- care ----------
 
