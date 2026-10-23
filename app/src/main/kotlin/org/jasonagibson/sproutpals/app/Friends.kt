@@ -19,6 +19,11 @@ class Friends {
     @Serializable data class Friend(val code: String, val species: String, val stage: String, val lastSeen: Long = 0)
     @Serializable data class Heart(val from: String, val message: String, val at: Long)
     @Serializable private data class Err(val error: String = "")
+    /** A friend's pal staying in our garden ([until] in server seconds). */
+    @Serializable data class Visitor(val code: String, val species: String, val stage: String, val outfit: String = "", val until: Long)
+    /** Our pal out at [host]'s garden until [until] (server seconds). */
+    @Serializable data class Away(val host: String, val until: Long)
+    @Serializable data class GardenNow(val visitors: List<Visitor> = emptyList(), val away: Away? = null)
 
     sealed interface Reply<out T> {
         data class Ok<T>(val value: T) : Reply<T>
@@ -42,6 +47,15 @@ class Friends {
         call("POST", "/hearts", token, """{"code":${JsonPrimitive(code)},"message":${JsonPrimitive(message)}}""") { }
 
     suspend fun inbox(token: String): Reply<List<Heart>> = call("GET", "/inbox", token, null) { json.decodeFromString(it) }
+
+    /** What the pal is wearing (shop ids), so it arrives dressed up when visiting. */
+    suspend fun setOutfit(token: String, ids: List<String>): Reply<Unit> =
+        call("PUT", "/outfit", token, """{"outfit":${JsonPrimitive(ids.joinToString(","))}}""") { }
+
+    suspend fun visit(token: String, code: String, hours: Int): Reply<Away> =
+        call("POST", "/visits", token, """{"code":${JsonPrimitive(code)},"hours":$hours}""") { json.decodeFromString(it) }
+
+    suspend fun garden(token: String): Reply<GardenNow> = call("GET", "/garden", token, null) { json.decodeFromString(it) }
 
     private suspend fun <T> call(method: String, path: String, token: String?, body: String?, parse: (String) -> T): Reply<T> =
         withContext(Dispatchers.IO) {

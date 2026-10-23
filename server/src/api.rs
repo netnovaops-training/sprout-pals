@@ -7,6 +7,9 @@
 //!   GET  /api/friends               -> [friend...]
 //!   POST /api/hearts {code, message}                                (to a friend)
 //!   GET  /api/inbox                 -> [{from, message, at}]       (each heart delivered once)
+//!   PUT  /api/outfit {outfit}                                       (worn items, "hat,shirt,pants")
+//!   POST /api/visits {code, hours}  -> {host, until}               (send your pal to a friend)
+//!   GET  /api/garden                -> {visitors: [...], away}     (who's here; is my pal out)
 
 use crate::store::{normalize_code, now, Player, Store};
 use axum::extract::State;
@@ -26,6 +29,14 @@ const REGISTER_PER_HOUR_PER_IP: usize = 10;
 const MESSAGES: &[&str] = &["", "hi!", "miss you", "good morning", "good night", "let's play", "thank you", "proud of you"];
 const SPECIES: &[&str] = &["EGG", "JUN", "KONA", "RUSTY", "KARA", "DJ", "MAUI", "JASON"];
 const STAGES: &[&str] = &["EGG", "BABY", "KID", "ADULT", "OLD", "GONE"];
+/// Visits last 1-4 hours; a garden shows up to 3 visitors at once.
+const MAX_VISIT_HOURS: i64 = 4;
+const MAX_VISITORS: i64 = 3;
+/// Shop outfit ids the app may send. Anything else is refused, so only known items travel.
+const OUTFITS: &[&str] = &[
+    "flower_crown", "bow", "beanie", "sun_hat", "cowboy_hat", "crown",
+    "green_tee", "flannel", "raincoat", "sweater", "jeans", "work_pants",
+];
 
 #[derive(Clone)]
 pub struct AppState {
@@ -43,6 +54,9 @@ pub fn router(store: Store) -> Router {
         .route("/api/friends", post(add_friend).get(list_friends))
         .route("/api/hearts", post(send_heart))
         .route("/api/inbox", get(inbox))
+        .route("/api/outfit", put(set_outfit))
+        .route("/api/visits", post(start_visit))
+        .route("/api/garden", get(garden))
         .with_state(state)
 }
 
@@ -173,6 +187,52 @@ async fn inbox(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<J
     Ok(Json(json!(state.store.take_inbox(me.id).await?)))
 }
 
+#[derive(Deserialize)]
+struct OutfitBody {
+    #[serde(default)]
+    outfit: String,
+}
+
+async fn set_outfit(State(state): State<AppState>, headers: HeaderMap, Json(b): Json<OutfitBody>) -> ApiResult<StatusCode> {
+    let me = caller(&state, &headers).await?;
+    let items: Vec<&str> = b.outfit.split(',').filter(|s| !s.is_empty()).collect();
+    if items.len() > 3 || items.iter().any(|i| !OUTFITS.contains(i)) {
+        return Err(ApiError(StatusCode::BAD_REQUEST, "Unknown outfit."));
+    }
+    state.store.set_outfit(me.id, &items.join(",")).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct VisitBody {
+    code: String,
+    hours: i64,
+}
+
+async fn start_visit(State(state): State<AppState>, headers: HeaderMap, Json(b): Json<VisitBody>) -> ApiResult<Json<serde_json::Value>> {
+    let me = caller(&state, &headers).await?;
+    if !(1..=MAX_VISIT_HOURS).contains(&b.hours) {
+        return Err(ApiError(StatusCode::BAD_REQUEST, "Visits are 1 to 4 hours."));
+    }
+    let code = normalize_code(&b.code).ok_or(ApiError(StatusCode::BAD_REQUEST, "Unknown garden."))?;
+    let host = state.store.by_code(&code).await?.ok_or(ApiError(StatusCode::NOT_FOUND, "Unknown garden."))?;
+    if !state.store.are_friends(me.id, host.id).await? {
+        return Err(ApiError(StatusCode::FORBIDDEN, "Add them as a friend first."));
+    }
+    if state.store.current_visit(me.id).await?.is_some() {
+        return Err(ApiError(StatusCode::CONFLICT, "Your pal is already out visiting."));
+    }
+    let until = state.store.start_visit(me.id, host.id, b.hours).await?;
+    Ok(Json(json!({ "host": host.code, "until": until })))
+}
+
+async fn garden(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<Json<serde_json::Value>> {
+    let me = caller(&state, &headers).await?;
+    let visitors = state.store.visitors(me.id, MAX_VISITORS).await?;
+    let away = state.store.current_visit(me.id).await?;
+    Ok(Json(json!({ "visitors": visitors, "away": away })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,6 +324,41 @@ mod tests {
 
         let (s, _) = call(&app, "PUT", "/api/pet", Some(&me), Some(json!({ "species": "DRAGON", "stage": "ADULT" }))).await;
         assert_eq!(s, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn visits_show_in_the_hosts_garden() {
+        let app = app().await;
+        let (jason_code, jason) = new_player(&app).await;
+        let (jun_code, jun) = new_player(&app).await;
+        let (_, stranger) = new_player(&app).await;
+
+        // strangers can't visit
+        let (s, _) = call(&app, "POST", "/api/visits", Some(&stranger), Some(json!({ "code": jun_code, "hours": 2 }))).await;
+        assert_eq!(s, StatusCode::FORBIDDEN);
+
+        call(&app, "POST", "/api/friends", Some(&jason), Some(json!({ "code": jun_code }))).await;
+        call(&app, "PUT", "/api/pet", Some(&jason), Some(json!({ "species": "KONA", "stage": "KID" }))).await;
+        let (s, _) = call(&app, "PUT", "/api/outfit", Some(&jason), Some(json!({ "outfit": "sun_hat,flannel" }))).await;
+        assert_eq!(s, StatusCode::NO_CONTENT);
+        let (s, _) = call(&app, "PUT", "/api/outfit", Some(&jason), Some(json!({ "outfit": "jetpack" }))).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+
+        let (s, _) = call(&app, "POST", "/api/visits", Some(&jason), Some(json!({ "code": jun_code, "hours": 9 }))).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "too long");
+        let (s, j) = call(&app, "POST", "/api/visits", Some(&jason), Some(json!({ "code": jun_code, "hours": 2 }))).await;
+        assert_eq!(s, StatusCode::OK, "{j}");
+        let (s, _) = call(&app, "POST", "/api/visits", Some(&jason), Some(json!({ "code": jun_code, "hours": 1 }))).await;
+        assert_eq!(s, StatusCode::CONFLICT, "one visit at a time");
+
+        // Jun sees Kona, dressed up; Jason sees his pal is away
+        let (_, g) = call(&app, "GET", "/api/garden", Some(&jun), None).await;
+        assert_eq!(g["visitors"][0]["code"], jason_code);
+        assert_eq!(g["visitors"][0]["species"], "KONA");
+        assert_eq!(g["visitors"][0]["outfit"], "sun_hat,flannel");
+        let (_, g) = call(&app, "GET", "/api/garden", Some(&jason), None).await;
+        assert_eq!(g["away"]["host"], jun_code);
+        assert_eq!(g["visitors"].as_array().unwrap().len(), 0);
     }
 
     #[test]

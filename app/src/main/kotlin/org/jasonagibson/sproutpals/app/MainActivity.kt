@@ -101,12 +101,55 @@ class MainActivity : ComponentActivity() {
                 it.onArrive = { stops -> Milestones.announce(applicationContext, stops) }
                 it.onSoundOut = { sfx -> chip.play(sfx) }
                 it.onMusic = { on -> if (on) chip.startMusic() else chip.stopMusic() }
+                it.onVisitOut = { code, hours -> visit(it, code, hours) }
+                it.onHeartOut = { code, msg -> heart(it, code, msg) }
                 if (it.save.musicOn) chip.startMusic()
             }
             startPedometer()
             shaker.start()
             game?.let { syncFriends(it) }
             updater.check()?.let { game?.offerUpdate(it) }
+        }
+        // while the app is open: every minute, who's visiting and any new hearts
+        gardenPoll?.cancel()
+        gardenPoll = lifecycleScope.launch {
+            while (true) {
+                delay(60_000)
+                game?.let { pollGarden(it) }
+            }
+        }
+    }
+
+    private var gardenPoll: kotlinx.coroutines.Job? = null
+    private var outfitSent: List<String>? = null
+
+    /** Visitors, our pal's trip, new hearts, and our outfit if it changed. */
+    private suspend fun pollGarden(g: Game) {
+        val token = g.save.serverToken ?: return
+        if (g.save.wearing != outfitSent) {
+            if (friendsApi.setOutfit(token, g.save.wearing) is Friends.Reply.Ok) outfitSent = g.save.wearing
+        }
+        (friendsApi.garden(token) as? Friends.Reply.Ok)?.let { g.gardenNow(it.value) }
+        (friendsApi.inbox(token) as? Friends.Reply.Ok)?.value?.lastOrNull()?.let { h ->
+            g.friendsNote = "♥ from ${h.from}${if (h.message.isNotBlank()) ": ${h.message}" else ""}"
+        }
+    }
+
+    private fun visit(g: Game, code: String, hours: Int) {
+        val token = g.save.serverToken ?: return g.visitFailed("Still connecting...")
+        lifecycleScope.launch {
+            friendsApi.setOutfit(token, g.save.wearing)   // arrive dressed up
+            when (val r = friendsApi.visit(token, code, hours)) {
+                is Friends.Reply.Ok -> g.visitStarted(r.value.host, r.value.until * 1000)
+                is Friends.Reply.Fail -> g.visitFailed(r.message)
+            }
+        }
+    }
+
+    private fun heart(g: Game, code: String, message: String) {
+        val token = g.save.serverToken ?: return
+        lifecycleScope.launch {
+            (friendsApi.sendHeart(token, code, message) as? Friends.Reply.Fail)?.let { g.visitFailed(it.message) }
         }
     }
 
@@ -124,9 +167,7 @@ class MainActivity : ComponentActivity() {
         val pet = g.pet
         friendsApi.setPet(token, if (pet.stage == Stage.EGG) "EGG" else pet.species.name, if (pet.ended != null) "GONE" else pet.stage.name)
         (friendsApi.friends(token) as? Friends.Reply.Ok)?.let { g.friendList = it.value }
-        (friendsApi.inbox(token) as? Friends.Reply.Ok)?.value?.lastOrNull()?.let { h ->
-            g.friendsNote = "♥ from ${h.from}${if (h.message.isNotBlank()) ": ${h.message}" else ""}"
-        }
+        pollGarden(g)
     }
 
     private fun addFriend(g: Game, code: String) {
@@ -152,6 +193,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        gardenPoll?.cancel()
         pedometer.stop()
         shaker.stop()
         chip.stopMusic()   // music only while the app is on screen

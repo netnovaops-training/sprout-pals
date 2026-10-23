@@ -78,8 +78,11 @@ fun DrawScope.drawOutfitPreview(id: String, u: Float) {
 }
 
 /** Draws the worn hat (if any) on the head. */
-fun DrawScope.drawHat(save: Save, box: CharBox, px: Float) {
-    val hat = HATS[Shop.worn(save, Slot.HAT) ?: return] ?: return
+fun DrawScope.drawHat(save: Save, box: CharBox, px: Float) = drawHat(Shop.worn(save, Slot.HAT), box, px)
+
+/** Draws hat [id] (if it is one) on the head - also used for visiting friends' pals. */
+fun DrawScope.drawHat(id: String?, box: CharBox, px: Float) {
+    val hat = HATS[id ?: return] ?: return
     val w = hat.grid.maxOf { it.length }
     shaded(hat.grid, hat.pal, box.headX.toInt() - w / 2, box.headTop.toInt() - hat.grid.size + hat.sink, px)
 }
@@ -107,11 +110,15 @@ private fun bands(stage: Stage): Pair<ClosedFloatingPointRange<Float>, ClosedFlo
 private val layerCache = HashMap<Triple<ImageBitmap, String, Stage>, ImageBitmap>()
 
 /** The recoloured shirt and pants layers for this picture (empty if nothing is worn). */
-fun clothesLayers(img: ImageBitmap, stage: Stage, save: Save): List<ImageBitmap> {
+fun clothesLayers(img: ImageBitmap, stage: Stage, save: Save): List<ImageBitmap> = clothesLayers(img, stage, save.wearing)
+
+/** Same, from a list of worn item ids (a visiting friend's outfit). */
+fun clothesLayers(img: ImageBitmap, stage: Stage, worn: List<String>): List<ImageBitmap> {
     val (chest, legs) = bands(stage)
+    fun slot(s: Slot) = worn.firstOrNull { Shop.byId(it)?.slot == s }
     return listOfNotNull(
-        Shop.worn(save, Slot.SHIRT)?.let { id -> CLOTHES[id]?.let { layerCache.getOrPut(Triple(img, id, stage)) { recolor(img, chest, it) } } },
-        Shop.worn(save, Slot.PANTS)?.let { id -> CLOTHES[id]?.let { layerCache.getOrPut(Triple(img, id, stage)) { recolor(img, legs, it) } } },
+        slot(Slot.SHIRT)?.let { id -> CLOTHES[id]?.let { layerCache.getOrPut(Triple(img, id, stage)) { recolor(img, chest, it) } } },
+        slot(Slot.PANTS)?.let { id -> CLOTHES[id]?.let { layerCache.getOrPut(Triple(img, id, stage)) { recolor(img, legs, it) } } },
     )
 }
 

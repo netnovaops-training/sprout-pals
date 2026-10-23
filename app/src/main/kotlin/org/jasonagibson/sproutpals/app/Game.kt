@@ -45,6 +45,11 @@ sealed interface Panel {
     data class Message(val text: String) : Panel
     /** The shop, one item at a time: A next, B buy / bring out / put away, SHOP other page, C close. */
     data class Shop(val tab: ShopTab = ShopTab.CREATURES, val choice: Int = 0, val note: String = "") : Panel
+    /**
+     * Friends: A next, B pick. With a friend picked ([friend] set), A/B choose an action:
+     * visit for 1/2/4 hours or send a heart. C goes back.
+     */
+    data class Friends(val choice: Int = 0, val friend: String? = null, val note: String = "") : Panel
     /** The garden bed: A next plot, B plant / water / harvest, C close. [picking] = choosing a seed. */
     data class Garden(val plot: Int = 0, val picking: Boolean = false, val seed: Int = 0, val note: String = "") : Panel
     /** Pick a game: A next, B start, C back. */
@@ -117,6 +122,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (mini == null) animate(realNow)
         moving = petX != beforeX
 
+        checkHome()
         // the garden creatures' hour: perks, mischief, and the news of it
         val (visited, news) = Visitors.catchUp(save, now(), zone, rng)
         if (visited != save) commit(visited)
@@ -342,6 +348,10 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             is Panel.PlayMenu -> panel = p.copy(choice = (p.choice + 1) % MiniGame.NAMES.size)
             is Panel.Shop -> panel = p.copy(choice = (p.choice + 1) % Shop.items(p.tab, save).size, note = "")
             is Panel.Feed -> panel = p.copy(choice = (p.choice + 1) % feedChoices())
+            is Panel.Friends -> {
+                val n = if (p.friend == null) friendList.size else friendActions.size
+                if (n > 0) panel = p.copy(choice = (p.choice + 1) % n, note = "")
+            }
             is Panel.Garden -> panel =
                 if (p.picking) p.copy(seed = (p.seed + 1) % Garden.CROPS.size)
                 else p.copy(plot = (p.plot + 1) % Garden.PLOTS, note = "")
@@ -369,6 +379,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 return false
             }
             is Panel.Garden -> { gardenPress(p); return false }
+            is Panel.Friends -> { friendsPress(p); return false }
             is Panel.Status -> { panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1); return false }
             Panel.Ended -> { newEgg(); return false }
             is Panel.Update -> return p.progress == null
@@ -397,6 +408,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (panel is Panel.Ended) return
         if (panel is Panel.HowTo) { panel = Panel.PlayMenu(); return }
         (panel as? Panel.Garden)?.let { if (it.picking) { panel = it.copy(picking = false); return } }
+        (panel as? Panel.Friends)?.let { if (it.friend != null) { panel = Panel.Friends(); return } }
         if (panel != Panel.None) panel = Panel.None else selected = -1
     }
 
@@ -486,10 +498,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     // ---------- care ----------
 
-    private fun canInteract() = pet.ended == null && pet.stage != Stage.EGG && !pet.sleeping
+    private fun canInteract() = pet.ended == null && pet.stage != Stage.EGG && !pet.sleeping && !away
 
     private fun blocked(): Panel = Panel.Message(
         when {
+            away -> "OUT VISITING\n${save.awayHost}'S GARDEN"
             pet.stage == Stage.EGG -> "SHAKE TO OPEN!"
             pet.sleeping -> "ZZZ... ASLEEP"
             else -> "..."
@@ -497,6 +510,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     ).also { messageUntil = System.currentTimeMillis() + 1500 }
 
     private fun care(action: (PetState) -> Pair<PetState, Outcome>, fx: Effect) {
+        if (away) { panel = blocked(); return }
         val before = pet
         val (after, outcome) = action(before)
         when (outcome) {
@@ -539,6 +553,78 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         selected = -1
     }
 
+    // ---------- visits ----------
+
+    /** Friends' pals staying in our garden right now (from the server). */
+    var visitors by mutableStateOf<List<org.jasonagibson.sproutpals.app.Friends.Visitor>>(emptyList()); private set
+    /** Set by the activity: ask the server for a visit / a heart. The reply comes back via [visitStarted] etc. */
+    var onVisitOut: (code: String, hours: Int) -> Unit = { _, _ -> }
+    var onHeartOut: (code: String, message: String) -> Unit = { _, _ -> }
+
+    val away: Boolean get() = save.awayUntil > System.currentTimeMillis()
+
+    fun openFriends() {
+        if (mini != null || panel is Panel.Ended || panel is Panel.Update) return
+        panel = Panel.Friends(note = if (friendList.isEmpty()) "No friends yet.\nTap + ADD and type\na friend's garden code." else "")
+    }
+
+    private val friendActions = listOf("VISIT 1 HOUR" to 1, "VISIT 2 HOURS" to 2, "VISIT 4 HOURS" to 4, "SEND ♥ HI!" to 0, "SEND ♥ MISS YOU" to -1)
+
+    fun friendActionNames() = friendActions.map { it.first }
+
+    private fun friendsPress(p: Panel.Friends) {
+        if (p.friend == null) {
+            val f = friendList.getOrNull(p.choice) ?: return
+            panel = Panel.Friends(friend = f.code)
+            return
+        }
+        val (_, what) = friendActions[p.choice]
+        when {
+            what > 0 && away -> panel = p.copy(note = "YOUR PAL IS ALREADY\nOUT VISITING")
+            what > 0 && (pet.stage == Stage.EGG || pet.ended != null) -> panel = p.copy(note = "NOBODY TO SEND YET")
+            what > 0 -> { onVisitOut(p.friend, what); panel = p.copy(note = "PACKING A BAG...") }
+            else -> { onHeartOut(p.friend, if (what == 0) "hi!" else "miss you"); panel = p.copy(note = "♥ SENT!") }
+        }
+    }
+
+    /** The server said yes: our pal is off to [host]'s garden until [untilMs]. */
+    fun visitStarted(host: String, untilMs: Long) {
+        commit(save.copy(awayHost = host, awayUntil = untilMs))
+        onSound(Chiptune.Sfx.ARRIVE)
+        panel = Panel.None
+        show("OFF TO $host'S\nGARDEN! BACK IN\n${((untilMs - System.currentTimeMillis()) / Rules.HOUR + 1)}H", 2500)
+    }
+
+    fun visitFailed(message: String) { (panel as? Panel.Friends)?.let { panel = it.copy(note = message.uppercase()) } }
+
+    /** Fresh news from the server: who's visiting us, and whether our pal is out. */
+    fun gardenNow(g: org.jasonagibson.sproutpals.app.Friends.GardenNow) {
+        visitors = g.visitors
+        var s = save
+        g.away?.let { a -> if (s.awayHost == null) s = s.copy(awayHost = a.host, awayUntil = a.until * 1000) }
+        // each new arrival: a heart for our pal, and a hello
+        val keys = g.visitors.map { "${it.code}@${it.until}" }
+        val fresh = g.visitors.filter { "${it.code}@${it.until}" !in s.welcomed }
+        if (fresh.isNotEmpty()) {
+            s = s.copy(welcomed = (s.welcomed + keys).takeLast(30))
+            if (pet.ended == null && pet.stage != Stage.EGG) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
+            onSound(Chiptune.Sfx.ARRIVE)
+            if (panel == Panel.None) show("${fresh.first().code}'S ${fresh.first().species} CAME\nTO VISIT! +1 ♥", 3000)
+        }
+        if (s != save) commit(s)
+    }
+
+    /** Home again: a heart and some stars for the trip. */
+    private fun checkHome() {
+        val host = save.awayHost ?: return
+        if (System.currentTimeMillis() < save.awayUntil) return
+        var s = save.copy(awayHost = null, awayUntil = 0, points = save.points + VISIT_STARS)
+        if (pet.ended == null) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
+        commit(s)
+        onSound(Chiptune.Sfx.HATCH)
+        if (panel == Panel.None) show("HOME FROM\n$host'S GARDEN!\n+1 ♥  +$VISIT_STARS ★", 3000)
+    }
+
     // ---------- friends (garden codes) ----------
 
     /** One line of news for the code bar: "Added ABC123!", "Can't reach the garden server..." */
@@ -554,6 +640,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     companion object {
         const val STATUS_PAGES = 5
+        /** Stars for coming home from a visit. */
+        const val VISIT_STARS = 3
         /** Screen pixels left/right of home the pet may roam (sprites are 32 wide on a 96-wide screen). */
         const val MIN_X = -30
         const val MAX_X = 30

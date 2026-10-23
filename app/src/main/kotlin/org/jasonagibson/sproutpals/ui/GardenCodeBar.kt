@@ -45,8 +45,9 @@ private val LEAF = Color(0xFF3E8F26)
 private val mono = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, color = INK)
 
 /**
- * Under the title: "MY GARDEN  ABC123  [SHARE]  [+ FRIEND]".
- * + FRIEND swaps the row for a box to type a friend's code (keyboard opens, capitals on).
+ * Under the title: "MY GARDEN  ABC123  [SHARE]  [+ ADD]  [♥ VISIT]".
+ * + ADD swaps the row for a box to type a friend's code (keyboard opens, capitals on).
+ * ♥ VISIT opens the friends panel: send your pal over, or a heart.
  */
 @Composable
 fun GardenCodeBar(game: Game, onShare: () -> Unit, onAdd: (String) -> Unit) {
@@ -60,12 +61,15 @@ fun GardenCodeBar(game: Game, onShare: () -> Unit, onAdd: (String) -> Unit) {
                 .border(2.dp, INK, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             if (!adding) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BasicText("🌱 MY GARDEN", style = mono.copy(fontSize = 12.sp, color = LEAF))
-                    BasicText(code?.chunked(3)?.joinToString(" ") ?: "······", style = mono.copy(fontSize = 20.sp, letterSpacing = 2.sp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column {
+                        BasicText("🌱 MY GARDEN", style = mono.copy(fontSize = 10.sp, color = LEAF))
+                        BasicText(code?.chunked(3)?.joinToString(" ") ?: "······", style = mono.copy(fontSize = 18.sp, letterSpacing = 1.sp))
+                    }
                     Spacer(Modifier.weight(1f))
                     if (code != null) Chip("SHARE", Color(0xFFF5C542)) { onShare() }
-                    Chip("+ FRIEND", Color(0xFF8FD46A)) { adding = true; typed = "" }
+                    Chip("+ ADD", Color(0xFF8FD46A)) { adding = true; typed = "" }
+                    Chip("♥ VISIT", Color(0xFFF2A3C0)) { game.openFriends() }
                 }
             } else {
                 val focus = remember { FocusRequester() }
@@ -113,10 +117,10 @@ private fun Chip(label: String, color: Color, onClick: () -> Unit) {
     Box(
         Modifier.clip(RoundedCornerShape(8.dp)).background(INK).padding(2.dp)
             .clip(RoundedCornerShape(6.dp)).background(color).clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 7.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(label, style = mono.copy(fontSize = 13.sp))
+        BasicText(label, style = mono.copy(fontSize = 12.sp), softWrap = false)
     }
 }
 

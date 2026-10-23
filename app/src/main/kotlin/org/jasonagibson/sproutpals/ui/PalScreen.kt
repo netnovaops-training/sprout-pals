@@ -276,6 +276,7 @@ private fun PanelOverlay(game: Game) {
             game.mini?.let { GameHintStrip(it); return }
             if (game.pet.stage == Stage.EGG && game.frame % 8 < 6) ShakeBanner()
             if (game.walkMode) GoingPlacesBanner(game)
+            if (game.away) AwayBanner(game)
             if (game.selected >= 0) IconHint(game.selected)
             return
         }
@@ -293,6 +294,7 @@ private fun PanelOverlay(game: Game) {
         is Panel.GameOver -> p.text + "\n\nB: PLAY AGAIN\nC: DONE"
         is Panel.Shop -> { ShopCard(game, p); return }
         is Panel.Garden -> gardenText(game, p)
+        is Panel.Friends -> friendsText(game, p)
         Panel.Ended -> {
             val pet = game.pet
             "${pet.species.title.uppercase()}\nRETURNED TO\nTHE GARDEN\n\n${pet.ended?.line ?: ""}\n\nB = NEW EGG"
@@ -424,6 +426,34 @@ private fun GoingPlacesBanner(game: Game) {
             BasicText(text, style = lcdText.copy(color = Color(0xFFFFF3D6), fontSize = 11.sp, lineHeight = 13.sp))
         }
     }
+}
+
+/** While our pal is out: a little sign saying where, and for how long. */
+@Composable
+private fun AwayBanner(game: Game) {
+    val left = ((game.save.awayUntil - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
+    val text = "🧳 VISITING ${game.save.awayHost}  ·  BACK IN ${if (left >= 60) "${left / 60}H ${left % 60}M" else "${left}M"}"
+    Box(Modifier.fillMaxSize().padding(top = 44.dp), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFA8743F)).border(2.dp, Color(0xFF5C3A1A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+            BasicText(text, style = lcdText.copy(color = Color(0xFFFFF3D6), fontSize = 11.sp, lineHeight = 13.sp))
+        }
+    }
+}
+
+/** The friends panel: pick a friend, then what to do. */
+private fun friendsText(game: Game, p: Panel.Friends): String {
+    val head = "♥ FRIENDS\n\n"
+    val tail = (if (p.note.isNotBlank()) "\n\n${p.note}" else "")
+    if (p.friend == null) {
+        if (game.friendList.isEmpty()) return head + p.note + "\n\nC: CLOSE"
+        val list = game.friendList.mapIndexed { i, f ->
+            val pet = if (f.species == "EGG") "EGG" else "${f.species} ${f.stage}"
+            (if (i == p.choice) "> " else "  ") + "${f.code}  $pet"
+        }.joinToString("\n")
+        return head + list + tail + "\n\nA: NEXT  B: PICK\nC: CLOSE"
+    }
+    val actions = game.friendActionNames().mapIndexed { i, a -> (if (i == p.choice) "> " else "  ") + a }.joinToString("\n")
+    return head + "${p.friend}\n\n" + actions + tail + "\n\nA: NEXT  B: GO\nC: BACK"
 }
 
 /** What each menu icon does, shown as a label while it's selected (phones can't hover). */

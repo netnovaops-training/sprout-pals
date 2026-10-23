@@ -1,4 +1,4 @@
-//! SQLite storage: players, friendships, hearts.
+//! SQLite storage: players, friendships, hearts, visits.
 
 use rand::Rng;
 use serde::Serialize;
@@ -29,6 +29,21 @@ pub struct Player {
     pub stage: String,
     #[serde(rename = "lastSeen")]
     pub last_seen: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Visitor {
+    pub code: String,
+    pub species: String,
+    pub stage: String,
+    pub outfit: String,
+    pub until: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Away {
+    pub host: String,
+    pub until: i64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -87,7 +102,73 @@ impl Store {
         sqlx::query("CREATE INDEX IF NOT EXISTS hearts_inbox ON hearts(recipient, delivered)")
             .execute(&self.pool)
             .await?;
+        // a pal staying in a friend's garden for a few hours
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS visits (
+                id INTEGER PRIMARY KEY,
+                guest INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                host INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                start INTEGER NOT NULL,
+                until INTEGER NOT NULL
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS visits_host ON visits(host, until)").execute(&self.pool).await?;
+        // what the pal is wearing, so it arrives dressed up (added after the first release)
+        let has_outfit = sqlx::query("SELECT 1 FROM pragma_table_info('players') WHERE name = 'outfit'")
+            .fetch_optional(&self.pool)
+            .await?
+            .is_some();
+        if !has_outfit {
+            sqlx::query("ALTER TABLE players ADD COLUMN outfit TEXT NOT NULL DEFAULT ''").execute(&self.pool).await?;
+        }
         Ok(())
+    }
+
+    pub async fn set_outfit(&self, id: i64, outfit: &str) -> sqlx::Result<()> {
+        sqlx::query("UPDATE players SET outfit = ? WHERE id = ?").bind(outfit).bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    /// The guest's visit that's still going, if any (one visit at a time).
+    pub async fn current_visit(&self, guest: i64) -> sqlx::Result<Option<Away>> {
+        let r = sqlx::query(
+            "SELECT p.code, v.until FROM visits v JOIN players p ON p.id = v.host
+             WHERE v.guest = ? AND v.until > ? ORDER BY v.until DESC LIMIT 1",
+        )
+        .bind(guest)
+        .bind(now())
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(r.map(|r| Away { host: r.get(0), until: r.get(1) }))
+    }
+
+    pub async fn start_visit(&self, guest: i64, host: i64, hours: i64) -> sqlx::Result<i64> {
+        let t = now();
+        let until = t + hours * 3600;
+        sqlx::query("INSERT INTO visits (guest, host, start, until) VALUES (?, ?, ?, ?)")
+            .bind(guest)
+            .bind(host)
+            .bind(t)
+            .bind(until)
+            .execute(&self.pool)
+            .await?;
+        Ok(until)
+    }
+
+    /// Pals visiting this garden right now (at most [limit]), earliest arrival first.
+    pub async fn visitors(&self, host: i64, limit: i64) -> sqlx::Result<Vec<Visitor>> {
+        let rows = sqlx::query(
+            "SELECT p.code, p.species, p.stage, p.outfit, v.until FROM visits v JOIN players p ON p.id = v.guest
+             WHERE v.host = ? AND v.until > ? ORDER BY v.start LIMIT ?",
+        )
+        .bind(host)
+        .bind(now())
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.iter().map(|r| Visitor { code: r.get(0), species: r.get(1), stage: r.get(2), outfit: r.get(3), until: r.get(4) }).collect())
     }
 
     /// New player: a fresh garden code and a secret token (64 hex chars from the OS RNG).

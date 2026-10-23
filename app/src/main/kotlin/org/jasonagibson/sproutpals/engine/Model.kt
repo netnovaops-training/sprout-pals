@@ -119,6 +119,11 @@ data class Save(
     /** Today's weather event, if one rolled, and the day (epoch day) it was rolled for. */
     val weather: WeatherEvent? = null,
     val weatherDay: Long = -1,
+    /** Our pal out visiting: whose garden, and until when (clock ms). Null/0 = home. */
+    val awayHost: String? = null,
+    val awayUntil: Long = 0,
+    /** Visits already welcomed ("code@until"), so each arrival is celebrated once. */
+    val welcomed: List<String> = emptyList(),
     /** Phone notifications already sent and not yet dealt with (see Reminders). */
     val notified: List<String> = emptyList(),
     /** Times the last creature-page item was bought. */

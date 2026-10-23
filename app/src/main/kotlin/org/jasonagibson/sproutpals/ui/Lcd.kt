@@ -103,6 +103,26 @@ fun DrawScope.grid(g: Grid, pal: Map<Char, Long>, x: Int, y: Int, px: Float, fli
     }
 }
 
+/** Up to three visiting pals, each pacing its own stretch of lawn, with a heart now and then. */
+private fun DrawScope.drawVisitors(visitors: List<org.jasonagibson.sproutpals.app.Friends.Visitor>, f: Int, ground: Int, px: Float) {
+    visitors.take(3).forEachIndexed { i, v ->
+        val species = runCatching { Species.valueOf(v.species) }.getOrNull() ?: return@forEachIndexed
+        val stage = runCatching { Stage.valueOf(v.stage) }.getOrNull()?.takeIf { it != Stage.EGG } ?: return@forEachIndexed
+        val worn = v.outfit.split(',').filter { it.isNotBlank() }
+        val home = 14 + i * 26
+        val t = (f / 3 + i * 17) % 40
+        val dx = if (t < 20) t / 2 else (40 - t) / 2
+        val box = character(
+            species, stage, centerX = (home + dx).toFloat(), ground = (ground - 3).toFloat(), unitPx = px,
+            unitsPerPixel = petScale(species, stage) * 0.8f, faceLeft = t >= 20,
+            pose = if ((f / 2 + i) % 4 < 2) CharacterArt.Pose.STAND else CharacterArt.Pose.walk(species.kind, f / 2),
+            layers = { img -> if (species.kind == Kind.HUMAN) clothesLayers(img, stage, worn) else emptyList() },
+        )
+        drawHat(worn.firstOrNull { org.jasonagibson.sproutpals.engine.Shop.byId(it)?.slot == org.jasonagibson.sproutpals.engine.Slot.HAT }, box, px)
+        if ((f + i * 30) % 64 < 10) grid(Sprites.HEART, Sprites.HEART_PALETTE, box.headX.toInt() - 2, box.headTop.toInt() - 7, px)
+    }
+}
+
 internal fun DrawScope.block(x: Int, y: Int, w: Int, h: Int, c: Color, px: Float) =
     drawRect(c, Offset(x * px, y * px), Size(w * px + 0.6f, h * px + 0.6f))
 
@@ -205,9 +225,14 @@ fun DrawScope.drawLcd(game: Game) {
         drawGardenBed(game.save, game.now(), f, GROUND, px, (game.panel as? Panel.Garden)?.plot)
     }
 
+    // ----- friends' pals visiting: they stroll along the back of the lawn, dressed in their outfits -----
+    if (playing == null && !dark && !walking) drawVisitors(game.visitors, f, GROUND, px)
+
     // ----- the pet (or the sprout it left behind) -----
     if (playing != null) {
         Unit   // the game drew the pet
+    } else if (game.away) {
+        Unit   // out visiting a friend (the banner says where)
     } else if (pet.ended != null) {
         grid(Sprites.SPROUT.x2(), Sprites.SPROUT_PALETTE, 40, GROUND - 13, px)
     } else if (!dark) {
