@@ -45,10 +45,10 @@ class Chiptune {
         if (music != null) return
         worker.execute {
             if (music != null) return@execute
-            val pcm = song()
+            val (pcm, loopFrom) = Theme.render(rate)
             music = AudioTrack(attrs(), format(), pcm.size * 2, AudioTrack.MODE_STATIC, 0).apply {
                 write(pcm, 0, pcm.size)
-                setLoopPoints(0, pcm.size, -1)    // loop forever
+                setLoopPoints(loopFrom, pcm.size, -1)    // fanfare once, then loop the rest forever
                 play()
             }
         }
@@ -88,27 +88,6 @@ class Chiptune {
         return ShortArray(out.size) { (out[it].coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort() }
     }
 
-    /** The background loop: a cheerful garden tune, melody over a bouncing bass. ~13 seconds. */
-    private fun song(): ShortArray {
-        val eighth = 200 // ms, about 150 beats per minute
-        val melody = listOf(
-            72, 76, 79, 76, 77, 81, 79, 0,
-            76, 79, 84, 79, 77, 76, 74, 0,
-            72, 74, 76, 72, 79, 77, 76, 74,
-            72, 76, 74, 71, 72, 0, 72, 0,
-            76, 77, 79, 0, 81, 79, 77, 76,
-            74, 76, 77, 0, 79, 77, 76, 74,
-            72, 76, 79, 84, 83, 79, 77, 74,
-            72, 0, 67, 71, 72, 0, 0, 0,
-        )
-        val bassBars = listOf(
-            listOf(48, 55, 48, 55), listOf(53, 60, 53, 60), listOf(48, 55, 48, 55), listOf(55, 50, 55, 48),
-            listOf(53, 60, 53, 60), listOf(50, 57, 55, 59), listOf(48, 55, 53, 55), listOf(48, 43, 48, 48),
-        )
-        val lead = render(melody.map { Voice(it, eighth, 0.25, 0.16) }, sequential = true)
-        val bass = render(bassBars.flatten().map { Voice(it, eighth * 2, 0.5, 0.10) }, sequential = true)
-        return ShortArray(minOf(lead.size, bass.size)) { (lead[it] + bass[it]).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort() }
-    }
 
     private fun attrs() = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_GAME)

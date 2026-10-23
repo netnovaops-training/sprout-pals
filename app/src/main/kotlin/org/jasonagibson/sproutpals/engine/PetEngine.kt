@@ -128,7 +128,7 @@ object PetEngine {
         var s = s0
         val hatched = s.hatchedAt ?: return s  // an egg just waits to be shaken
         val age = t - hatched
-        if (age >= Rules.LIFE_END) return end(s, EndReason.NATURAL, t)
+        if (age >= Rules.LIFE_END + s.bonusLife * Rules.MINUTE) return end(s, EndReason.NATURAL, t)
 
         val stage = Rules.stageAt(age)
         if (stage != s.stage) s = s.copy(stage = stage, careMistakes = 0)
@@ -208,6 +208,17 @@ object PetEngine {
         canCare(s)?.let { return s to it }
         if (s.hunger >= Rules.MAX_HEARTS) return s to Outcome.NOT_NEEDED
         return s.copy(hunger = s.hunger + 1, weight = s.weight + 1, hungerZeroMinutes = 0) to Outcome.OK
+    }
+
+    /** Food from the garden: fills like a meal and cheers like a snack, without the extra weight. */
+    fun feedHarvest(s: PetState): Pair<PetState, Outcome> {
+        canCare(s)?.let { return s to it }
+        if (s.hunger >= Rules.MAX_HEARTS && s.happy >= Rules.MAX_HEARTS) return s to Outcome.NOT_NEEDED
+        return s.copy(
+            hunger = (s.hunger + 1).coerceAtMost(Rules.MAX_HEARTS),
+            happy = (s.happy + 1).coerceAtMost(Rules.MAX_HEARTS),
+            hungerZeroMinutes = 0,
+        ) to Outcome.OK
     }
 
     fun feedSnack(s: PetState): Pair<PetState, Outcome> {

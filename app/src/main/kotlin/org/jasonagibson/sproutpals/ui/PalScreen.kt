@@ -39,6 +39,8 @@ import org.jasonagibson.sproutpals.app.Chiptune
 import org.jasonagibson.sproutpals.app.Game
 import org.jasonagibson.sproutpals.app.Panel
 import org.jasonagibson.sproutpals.engine.FruitCatch
+import org.jasonagibson.sproutpals.engine.Garden
+import org.jasonagibson.sproutpals.engine.PlotState
 import org.jasonagibson.sproutpals.engine.HigherLower
 import org.jasonagibson.sproutpals.engine.JumpRope
 import org.jasonagibson.sproutpals.engine.MiniGame
@@ -46,6 +48,7 @@ import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Shop
 import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.TicTacToe
+import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
 
@@ -265,7 +268,10 @@ private fun PanelOverlay(game: Game) {
             return
         }
         is Panel.Message -> p.text
-        is Panel.Feed -> (if (p.choice == 0) "> MEAL\n  SNACK" else "  MEAL\n> SNACK")
+        is Panel.Feed -> {
+            val names = listOf("MEAL", "SNACK") + if (game.save.pantry.isEmpty()) emptyList() else listOf("HARVEST (${game.save.pantry.size})")
+            names.mapIndexed { i, n -> (if (i == p.choice) "> " else "  ") + n }.joinToString("\n")
+        }
         is Panel.Status -> statusPage(game, p.page) +
             if (game.pet.stage == Stage.EGG) "\n\nC: CLOSE"
             else "\n\n${p.page + 1}/${Game.STATUS_PAGES}  " + if (p.page + 1 >= Game.STATUS_PAGES) "B: DONE" else "B: NEXT  C: CLOSE"
@@ -273,23 +279,8 @@ private fun PanelOverlay(game: Game) {
             "\n\nA: NEXT  B: PICK"
         is Panel.HowTo -> HOW_TO[p.game] + "\n\nB: START  C: BACK"
         is Panel.GameOver -> p.text + "\n\nB: PLAY AGAIN\nC: DONE"
-        is Panel.Shop -> {
-            val save = game.save
-            val items = Shop.items(p.tab, save)
-            val item = items[p.choice.coerceIn(0, items.size - 1)]
-            val wear = p.tab == ShopTab.OUTFITS
-            // ☑ = out / being worn, ☐ = yours but put away
-            val (box, state) = when {
-                item.repeatable -> "" to "${item.price} PTS · B: BUY" + if (save.mysteryCount > 0) "  (×${save.mysteryCount})" else ""
-                !Shop.owns(save, item.id) -> "" to "${item.price} PTS · B: BUY"
-                Shop.showing(save, item.id) -> "☑ " to "B: PUT AWAY"
-                else -> "☐ " to if (wear) "B: WEAR" else "B: BRING OUT"
-            }
-            val tabs = ShopTab.entries.joinToString("  ") { if (it == p.tab) "[${it.title}]" else it.title.lowercase() }
-            "★ ${save.points} PTS\n$tabs\n\n${p.choice + 1}/${items.size}  $box${item.name}\n${item.blurb}\n\n$state" +
-                (if (p.note.isNotBlank()) "\n${p.note}" else "") + "\n\nA: NEXT  SHOP: PAGE\nC: CLOSE"
-        }
-        Panel.Garden -> "GARDEN\nCOMING SOON!\n\nPLANT, GROW,\nHARVEST"
+        is Panel.Shop -> { ShopCard(game, p); return }
+        is Panel.Garden -> gardenText(game, p)
         Panel.Ended -> {
             val pet = game.pet
             "${pet.species.title.uppercase()}\nRETURNED TO\nTHE GARDEN\n\n${pet.ended?.line ?: ""}\n\nB = NEW EGG"
@@ -333,6 +324,30 @@ private fun GameHintStrip(g: MiniGame) {
     }
 }
 
+/** The Garden panel: the chosen plot (or the seed list when planting). */
+private fun gardenText(game: Game, p: Panel.Garden): String {
+    val now = game.now()
+    val head = "GARDEN   PLOT ${p.plot + 1}/${Garden.PLOTS}\n\n"
+    if (p.picking) {
+        val list = Garden.CROPS.mapIndexed { i, c ->
+            (if (i == p.seed) "> " else "  ") + "${c.name.padEnd(10)} ⏱${hours(c.growMinutes).padEnd(3)} ★${Garden.harvestPoints(game.save, c)}"
+        }.joinToString("\n")
+        return head + "PICK A SEED\n$list\n\n⏱ = WET HOURS TO GROW\n★ = STARS AT HARVEST\n\nA: NEXT  B: PLANT\nC: BACK"
+    }
+    val plot = Garden.plots(game.save)[p.plot]
+    val name = Garden.crop(plot.crop)?.name ?: ""
+    val left = hours(Garden.minutesLeft(plot, now))
+    val (line, action) = when (Garden.state(plot, now)) {
+        PlotState.EMPTY -> "EMPTY SOIL" to "B: PLANT"
+        PlotState.DRY -> "$name\nTHIRSTY! NOT GROWING\n$left OF WET SOIL TO GO" to "B: WATER"
+        PlotState.GROWING -> "$name\nGROWING... $left TO GO" to "B: WATER"
+        PlotState.RIPE -> "$name IS RIPE!" to "B: HARVEST"
+    }
+    return head + line + (if (p.note.isNotBlank()) "\n\n${p.note}" else "") + "\n\nA: NEXT PLOT  $action\nC: CLOSE"
+}
+
+private fun hours(min: Int) = if (min >= 60) "${(min + 30) / 60}H" else "${min}M"
+
 private fun statusPage(game: Game, page: Int): String {
     val pet = game.pet
     if (pet.stage == Stage.EGG) return "AN EGG!\nSHAKE YOUR\nPHONE TO\nOPEN IT"
@@ -348,7 +363,7 @@ private fun statusPage(game: Game, page: Int): String {
             if (next == null) "WALKED ${"%.0f".format(Route.miles(steps))} MI\n\nEVERY SHOP\nVISITED!"
             else "NEXT STOP\n${next.name.uppercase()}\n${next.town.uppercase()}\n\n${"%.1f".format(Route.milesToNext(steps))} MI TO GO"
         }
-        else -> "POINTS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\nWALK & CARE\nTO EARN MORE"
+        else -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
     }
 }
 
@@ -396,7 +411,7 @@ private val HINTS = listOf(
     "PLAY · B: play together",
     "MEDICINE · B: when it's sick",
     "CLEAN · B: wash the mess away",
-    "GARDEN · B: your garden & friends",
+    "GARDEN · B: plant, water, harvest",
 )
 
 @Composable

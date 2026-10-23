@@ -12,14 +12,29 @@ class ShopTest {
     private fun item(id: String) = Shop.ITEMS.first { it.id == id }
 
     @Test fun `buying spends points and brings the item straight out`() {
-        val (after, r) = Shop.press(Save(pet = pet, points = 10), item("butterfly"))
+        val (after, r) = Shop.press(Save(pet = pet, points = 25), item("butterfly"))
         assertEquals(ShopResult.BOUGHT, r)
-        assertEquals(2, after.points)
+        assertEquals(5, after.points)
         assertTrue(Shop.showing(after, "butterfly"))
     }
 
+    @Test fun `a creature goes home after its day out, and comes back when switched on`() {
+        val t0 = 1_800_000_000_000L
+        val hour = 3_600_000L
+        var s = Shop.press(Save(pet = pet, points = 50, visitorsAt = t0), item("ladybug"), t0).first
+        s = Visitors.catchUp(s, t0 + 23 * hour, java.time.ZoneId.of("UTC"), Random(1)).first
+        assertTrue(Shop.showing(s, "ladybug"))
+        val (gone, news) = Visitors.catchUp(s, t0 + 25 * hour, java.time.ZoneId.of("UTC"), Random(1))
+        assertFalse(Shop.showing(gone, "ladybug"))
+        assertTrue(news.any { "WENT HOME" in it })
+        val (back, r) = Shop.press(gone, item("ladybug"), t0 + 25 * hour)
+        assertEquals(ShopResult.SHOWN, r)
+        assertEquals(gone.points, back.points)
+        assertTrue(Shop.showing(back, "ladybug"))
+    }
+
     @Test fun `all creatures can be out at once, each switched off on its own`() {
-        var s = Save(pet = pet, points = 100)
+        var s = Save(pet = pet, points = 500)
         s = Shop.press(s, item("butterfly")).first
         s = Shop.press(s, item("bunny")).first
         assertTrue(Shop.showing(s, "butterfly") && Shop.showing(s, "bunny"))
@@ -46,7 +61,7 @@ class ShopTest {
     }
 
     @Test fun `can't buy without enough points`() {
-        val (after, r) = Shop.press(Save(pet = pet, points = 3), item("butterfly"))
+        val (after, r) = Shop.press(Save(pet = pet, points = 19), item("butterfly"))
         assertEquals(ShopResult.TOO_POOR, r)
         assertFalse(Shop.owns(after, "butterfly"))
     }

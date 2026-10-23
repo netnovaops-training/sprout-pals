@@ -78,6 +78,35 @@ private fun pingPong(f: Int, a: Int, b: Int, speed: Float): Pair<Int, Boolean> {
 private fun DrawScope.sprite(g: Grid, pal: Map<Char, Long>, x: Int, y: Int, u: Float, flip: Boolean = false) =
     shaded(g, pal, x, y, u, flip)
 
+/** A shop item's picture, centred in a 24x24-unit box and gently animated. */
+fun DrawScope.drawItemPreview(id: String, f: Int, u: Float) {
+    val (frames, pal) = when (id) {
+        "ladybug" -> Art.LADYBUG to Art.LADYBUG_PAL
+        "butterfly" -> Art.BUTTERFLY to Art.BUTTERFLY_PAL
+        "bee" -> Art.BEE to Art.BEE_PAL
+        "bluebird" -> Art.BLUEBIRD to Art.BLUEBIRD_PAL
+        "bunny" -> Art.BUNNY to Art.BUNNY_PAL
+        "squirrel" -> Art.SQUIRREL to Art.SQUIRREL_PAL
+        "hummingbird" -> Art.HUMMINGBIRD to Art.HUMMINGBIRD_PAL
+        "deer" -> Art.DEER to Art.DEER_PAL
+        "fireflies" -> {
+            for (i in 0 until 6) {
+                val glow = abs(((f / 2 + i * 3) % 10) - 5)
+                if (glow < 4) dot(3 + i * 3, 4 + (i * 7) % 14, 0xFFF4FF8AL, u)
+                if (glow < 2) dot(3 + i * 3, 4 + (i * 7) % 14 + 1, 0x88F4FF8AL, u)
+            }
+            return
+        }
+        else -> { drawOutfitPreview(id, u); return }
+    }
+    // small sprites at double size; the deer is big enough as it is
+    val g = frames[(f / 3) % frames.size]
+    val scale = if (g.maxOf { it.length } * 2 <= 22) 2 else 1
+    val gw = g.maxOf { it.length } * scale
+    val gh = g.size * scale
+    shaded(g, pal, (24 - gw) / 2 / scale, (24 - gh) / 2 / scale, u * scale)
+}
+
 /** Ground and fence visitors: drawn before the pet so it stands in front of them. */
 fun DrawScope.drawBackCritters(save: Save, f: Int, top: Int, ground: Int, u: Float) {
     if (Shop.showing(save, "deer")) {

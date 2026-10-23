@@ -71,6 +71,8 @@ data class PetState(
     val lightsOnAsleep: Int = 0,
     val ended: EndReason? = null,
     val endedAt: Long? = null,
+    /** Extra minutes of life, from the garden creatures. */
+    val bonusLife: Int = 0,
 )
 
 /** What is left of a pet after it returns to the garden. */
@@ -101,10 +103,19 @@ data class Save(
     val stopsReached: Int = 0,
     /** Things collected: walking-route prizes and shop items (ids). */
     val unlocked: List<String> = emptyList(),
-    /** Owned creatures switched off in the shop. */
+    /** Owned creatures switched off in the shop (or gone home after their day out). */
     val hidden: List<String> = emptyList(),
+    /** When each creature out in the garden goes home (clock ms); switching it on again resets it. */
+    val outUntil: Map<String, Long> = emptyMap(),
     /** Outfits being worn: at most one hat, one shirt, one pair of pants. */
     val wearing: List<String> = emptyList(),
+    /** The garden bed (see [Garden]) and harvested crops waiting to be eaten (crop ids). */
+    val plots: List<Plot> = emptyList(),
+    val pantry: List<String> = emptyList(),
+    /** Flowers the bees have grown on the lawn. */
+    val flowers: Int = 0,
+    /** The last whole hour the garden creatures were played through (see [Visitors]). */
+    val visitorsAt: Long = 0,
     /** Times the last creature-page item was bought. */
     val mysteryCount: Int = 0,
     /** Day number of the last SHOP long press. */

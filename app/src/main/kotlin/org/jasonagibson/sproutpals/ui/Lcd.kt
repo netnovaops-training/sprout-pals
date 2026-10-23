@@ -9,6 +9,7 @@ import org.jasonagibson.sproutpals.app.Game
 import org.jasonagibson.sproutpals.app.Move
 import org.jasonagibson.sproutpals.art.CharacterArt
 import org.jasonagibson.sproutpals.art.Grid
+import org.jasonagibson.sproutpals.app.Panel
 import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.art.Icons
@@ -84,8 +85,6 @@ private fun petScale(species: Species, stage: Stage): Float {
         if (species.kind == Kind.HUMAN) 1f else 0.82f
     return target / CharacterArt.of(species, stage).height
 }
-/** The raised bed the pet gardens in, at the right. */
-private const val BED_X = 66
 
 private val BAR = Color(0xFFE6E8CF)
 private val BAR_INK = Color(0xFF2E3A2A)
@@ -103,10 +102,10 @@ fun DrawScope.grid(g: Grid, pal: Map<Char, Long>, x: Int, y: Int, px: Float, fli
     }
 }
 
-private fun DrawScope.block(x: Int, y: Int, w: Int, h: Int, c: Color, px: Float) =
+internal fun DrawScope.block(x: Int, y: Int, w: Int, h: Int, c: Color, px: Float) =
     drawRect(c, Offset(x * px, y * px), Size(w * px + 0.6f, h * px + 0.6f))
 
-private fun DrawScope.block(x: Int, y: Int, w: Int, h: Int, c: Long, px: Float) = block(x, y, w, h, Color(c), px)
+internal fun DrawScope.block(x: Int, y: Int, w: Int, h: Int, c: Long, px: Float) = block(x, y, w, h, Color(c), px)
 
 /** Flat color bands for the sky, hills and lawn, picked from the phone clock. */
 private enum class Sky(val top: Long, val mid: Long, val low: Long, val hill: Long, val grass: Long, val grassDark: Long) {
@@ -180,8 +179,9 @@ fun DrawScope.drawLcd(game: Game) {
         // flowers and grass tufts in front
         val sway = if (f % 16 < 8) 0 else 1
         val flowerColors = listOf(0xFFE0344BL, 0xFFFFD84AL, 0xFF8E6FE0L, 0xFF3C7DD9L, 0xFFF2A3C0L)
-        for (i in 0 until 6) {
-            val fx = Math.floorMod(i * 17 + 3 - nearScroll, LCD_W + 6) - 3
+        // six flowers always, plus the ones the bees have grown
+        for (i in 0 until 6 + game.save.flowers) {
+            val fx = Math.floorMod(i * 17 + 3 + (i / 6) * 8 - nearScroll, LCD_W + 6) - 3
             val fy = GROUND - 2 + (i % 3) * 2
             block(fx + 1, fy, 1, 3, 0xFF2F8A3A, px)
             block(fx + sway, fy - 2, 3, 2, flowerColors[i % flowerColors.size], px)
@@ -198,12 +198,9 @@ fun DrawScope.drawLcd(game: Game) {
     if (playing == null && !dark) drawBackCritters(game.save, f, AREA_TOP, GROUND, px)
     if (playing != null) drawMiniGame(playing, pet, f, AREA_TOP, GROUND, px)
 
-    // ----- the garden bed: the pet plants a seedling here when it feels like gardening -----
+    // ----- the garden bed: three plots of real crops (see GardenDraw) -----
     if (!dark && !walking && playing == null) {
-        grid(Sprites.BED, Sprites.BED_PALETTE, BED_X, GROUND - 2, px)
-        val phase = if (game.move == Move.GARDEN) game.gardenPhase else game.lastSeedling
-        val seed = Sprites.SEEDLING[phase]
-        grid(seed.x2(), Sprites.SEEDLING_PALETTE, BED_X + 5, GROUND - 1 - seed.size * 2, px)
+        drawGardenBed(game.save, game.now(), f, GROUND, px, (game.panel as? Panel.Garden)?.plot)
     }
 
     // ----- the pet (or the sprout it left behind) -----

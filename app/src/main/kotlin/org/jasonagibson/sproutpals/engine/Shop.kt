@@ -29,16 +29,17 @@ object Shop {
     private fun outfit(id: String, name: String, price: Int, blurb: String, slot: Slot) = ShopItem(id, name, price, blurb, ShopTab.OUTFITS, slot)
 
     val ITEMS = listOf(
-        creature("ladybug", "LADYBUG", 5, "Crawls along\nthe grass"),
-        creature("butterfly", "BUTTERFLY", 8, "Flutters around\nyour pal"),
-        creature("bee", "BUMBLEBEE", 10, "Buzzes from\nflower to flower"),
-        creature("fireflies", "FIREFLIES", 12, "Glow at dusk\nand at night"),
-        creature("bluebird", "BLUEBIRD", 15, "Hops and pecks\non the fence"),
-        creature("bunny", "BUNNY", 20, "Hops across\nthe lawn"),
-        creature("squirrel", "SQUIRREL", 25, "Scampers along\nthe fence"),
-        creature("hummingbird", "HUMMINGBIRD", 30, "Hovers beside\nyour pal"),
-        creature("deer", "DEER", 40, "Grazes at the\nback of the garden"),
-        ShopItem(Rules.MYSTERY_ITEM, "???", 50, "????", ShopTab.CREATURES, repeatable = true),
+        // each costs more than the last, in step with how much it does for you (Jason, 10-23)
+        creature("ladybug", "LADYBUG", 10, "Crawls along\nthe grass"),
+        creature("butterfly", "BUTTERFLY", 20, "Flutters around\nyour pal"),
+        creature("bee", "BUMBLEBEE", 35, "Buzzes from\nflower to flower"),
+        creature("fireflies", "FIREFLIES", 50, "Glow at dusk\nand at night"),
+        creature("bluebird", "BLUEBIRD", 75, "Hops and pecks\non the fence"),
+        creature("bunny", "BUNNY", 100, "Hops across\nthe lawn"),
+        creature("squirrel", "SQUIRREL", 140, "Scampers along\nthe fence"),
+        creature("hummingbird", "HUMMINGBIRD", 190, "Hovers beside\nyour pal"),
+        creature("deer", "DEER", 250, "Grazes at the\nback of the garden"),
+        ShopItem(Rules.MYSTERY_ITEM, "???", 300, "????", ShopTab.CREATURES, repeatable = true),
 
         outfit("flower_crown", "FLOWER CROWN", 10, "Fresh from\nthe garden", Slot.HAT),
         outfit("green_tee", "GREEN TEE", 12, "Garden green\n(people only)", Slot.SHIRT),
@@ -70,24 +71,28 @@ object Shop {
     /** The worn item for a slot, if any. */
     fun worn(save: Save, slot: Slot) = save.wearing.firstOrNull { byId(it)?.slot == slot }
 
+    /** How long a creature stays out before it goes home and needs switching on again. */
+    const val OUT_HOURS = 24
+
     /** B on an item: buy it (it comes straight out), or switch one you own on or off. */
-    fun press(save: Save, item: ShopItem): Pair<Save, ShopResult> {
+    fun press(save: Save, item: ShopItem, now: Long = 0L): Pair<Save, ShopResult> {
         if (item.repeatable) {
             if (save.mysteryCount >= MAX_REPEAT) return save to ShopResult.MAXED
             if (save.points < item.price) return save to ShopResult.TOO_POOR
             return save.copy(points = save.points - item.price, mysteryCount = save.mysteryCount + 1) to ShopResult.BOUGHT
         }
         if (owns(save, item.id)) {
-            return if (showing(save, item.id)) setOn(save, item, false) to ShopResult.HIDDEN
-            else setOn(save, item, true) to ShopResult.SHOWN
+            return if (showing(save, item.id)) setOn(save, item, false, now) to ShopResult.HIDDEN
+            else setOn(save, item, true, now) to ShopResult.SHOWN
         }
         if (save.points < item.price) return save to ShopResult.TOO_POOR
         val bought = save.copy(points = save.points - item.price, unlocked = save.unlocked + item.id)
-        return setOn(bought, item, true) to ShopResult.BOUGHT
+        return setOn(bought, item, true, now) to ShopResult.BOUGHT
     }
 
-    private fun setOn(save: Save, item: ShopItem, on: Boolean): Save {
-        val slot = item.slot ?: return if (on) save.copy(hidden = save.hidden - item.id) else save.copy(hidden = save.hidden + item.id)
+    private fun setOn(save: Save, item: ShopItem, on: Boolean, now: Long): Save {
+        val slot = item.slot ?: return if (on) save.copy(hidden = save.hidden - item.id, outUntil = save.outUntil + (item.id to now + OUT_HOURS * 3_600_000L))
+            else save.copy(hidden = save.hidden + item.id, outUntil = save.outUntil - item.id)
         val others = save.wearing.filter { byId(it)?.slot != slot }
         return save.copy(wearing = if (on) others + item.id else others)
     }

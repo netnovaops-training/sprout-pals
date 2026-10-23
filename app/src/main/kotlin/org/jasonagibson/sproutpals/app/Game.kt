@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.jasonagibson.sproutpals.engine.Garden
 import org.jasonagibson.sproutpals.engine.MiniGame
+import org.jasonagibson.sproutpals.engine.PlotState
 import org.jasonagibson.sproutpals.engine.Outcome
 import org.jasonagibson.sproutpals.engine.PetEngine
 import org.jasonagibson.sproutpals.engine.PetState
@@ -18,6 +20,7 @@ import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.Steps
 import org.jasonagibson.sproutpals.engine.Stop
 import org.jasonagibson.sproutpals.engine.Walk
+import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Walking
 import java.time.ZoneId
 import kotlin.random.Random
@@ -39,7 +42,8 @@ sealed interface Panel {
     data class Message(val text: String) : Panel
     /** The shop, one item at a time: A next, B buy / bring out / put away, SHOP other page, C close. */
     data class Shop(val tab: ShopTab = ShopTab.CREATURES, val choice: Int = 0, val note: String = "") : Panel
-    data object Garden : Panel
+    /** The garden bed: A next plot, B plant / water / harvest, C close. [picking] = choosing a seed. */
+    data class Garden(val plot: Int = 0, val picking: Boolean = false, val seed: Int = 0, val note: String = "") : Panel
     /** Pick a game: A next, B start, C back. */
     data class PlayMenu(val choice: Int = 0) : Panel
     /** "How to play" card for the chosen game; B starts it. */
@@ -72,11 +76,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     private var moveUntil = 0L
     private var wanderTo = 0
-    /** Gardening: the spot next to the bed, and how far the seedling has grown (0-3). */
-    val gardenTo = 20
-    var gardenPhase by mutableIntStateOf(0); private set
-    /** What's left growing in the bed between gardening sessions. */
-    var lastSeedling by mutableIntStateOf(0); private set
+    /** Gardening: the spot just left of the bed, so the pet doesn't hide the crops. */
+    val gardenTo = 4
     private var lastReading = -1L
 
     private var effectUntil = 0L
@@ -112,6 +113,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val beforeX = petX
         if (mini == null) animate(realNow)
         moving = petX != beforeX
+
+        // the garden creatures' hour: perks, mischief, and the news of it
+        val (visited, news) = Visitors.catchUp(save, now(), zone, rng)
+        if (visited != save) commit(visited)
+        if (news.isNotEmpty() && panel == Panel.None && mini == null) {
+            show(news.takeLast(2).joinToString("\n\n"), 3500)
+        }
 
         val before = pet
         val after = PetEngine.advance(before, now(), zone, rng)
@@ -166,14 +174,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             Move.SPIN -> { if (f % 2 == 0) facingLeft = !facingLeft; petLift = BOUNCE[f % BOUNCE.size] }
             Move.RUN -> { stepX(if (facingLeft) -2 else 2); petLift = STRIDE[f % STRIDE.size] }
             Move.GARDEN -> {
-                // walk over to the bed, then dig and plant: the seedling grows a step every ~2 s
+                // walk over to the bed, then dig
                 if (petX != gardenTo) {
                     stepX(if (gardenTo < petX) -1 else 1)
                     petLift = STRIDE[f % STRIDE.size]
                 } else {
                     facingLeft = false
                     petLift = DIG[f % DIG.size]
-                    if (f % 16 == 0 && gardenPhase < 3) { gardenPhase++; lastSeedling = gardenPhase }
                 }
             }
             Move.BALL -> { facingLeft = true; petLift = HOP[f % HOP.size] }
@@ -201,7 +208,6 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         move = if (this.move == Move.WALK && !low) Move.GARDEN else choices.random()
         if (move == Move.HOP || move == Move.RUN) facingLeft = petX > 0
         if (move == Move.WANDER) wanderTo = (MIN_X..MAX_X).random()
-        if (move == Move.GARDEN) { gardenPhase = 0; lastSeedling = 0 }
         moveUntil = realNow + if (move == Move.GARDEN) 14_000L else (3_000L..6_000L).random()
     }
 
@@ -263,7 +269,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         }
         commit(save.copy(points = save.points + 50, secretDay = today))
         onSound(Chiptune.Sfx.ARRIVE)
-        show("★ A SECRET! ★\n+50 POINTS", 2500)
+        show("★ A SECRET! ★\n+50 ★", 2500)
     }
 
     /** Debug builds (long-press A): pretend you've been walking for 3 minutes. */
@@ -313,7 +319,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         commit(save.copy(pet = PetEngine.played(pet), points = save.points + earned))
         onSound(if (earned > 0) Chiptune.Sfx.HATCH else Chiptune.Sfx.C)
         panel = Panel.GameOver(
-            "${g.result}\n\n+$earned POINT${if (earned == 1) "" else "S"}" + if (happier) "\n+1 ♥" else "",
+            "${g.result}\n\n+$earned ★" + if (happier) "\n+1 ♥" else "",
         )
     }
 
@@ -323,7 +329,10 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         when (val p = panel) {
             is Panel.PlayMenu -> panel = p.copy(choice = (p.choice + 1) % MiniGame.NAMES.size)
             is Panel.Shop -> panel = p.copy(choice = (p.choice + 1) % Shop.items(p.tab, save).size, note = "")
-            is Panel.Feed -> panel = p.copy(choice = (p.choice + 1) % 2)
+            is Panel.Feed -> panel = p.copy(choice = (p.choice + 1) % feedChoices())
+            is Panel.Garden -> panel =
+                if (p.picking) p.copy(seed = (p.seed + 1) % Garden.CROPS.size)
+                else p.copy(plot = (p.plot + 1) % Garden.PLOTS, note = "")
             // last page: A or B closes instead of looping back to the first (C closes any time)
             is Panel.Status -> panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1)
             Panel.None -> selected = (selected + 1) % MenuItem.entries.size
@@ -339,7 +348,15 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             is Panel.Shop -> { shopPress(p); return false }
             is Panel.HowTo -> { startGame(p.game); return false }
             is Panel.GameOver -> { panel = Panel.PlayMenu(); return false }   // B: play again
-            is Panel.Feed -> { if (p.choice == 0) care(PetEngine::feedMeal, Effect.MEAL) else care(PetEngine::feedSnack, Effect.SNACK); return false }
+            is Panel.Feed -> {
+                when (p.choice) {
+                    0 -> care(PetEngine::feedMeal, Effect.MEAL)
+                    1 -> care(PetEngine::feedSnack, Effect.SNACK)
+                    else -> feedFromGarden()
+                }
+                return false
+            }
+            is Panel.Garden -> { gardenPress(p); return false }
             is Panel.Status -> { panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1); return false }
             Panel.Ended -> { newEgg(); return false }
             is Panel.Update -> return p.progress == null
@@ -356,7 +373,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             MenuItem.PLAY -> panel = if (canInteract()) Panel.PlayMenu() else blocked()
             MenuItem.MEDICINE -> care(PetEngine::medicine, Effect.PILL)
             MenuItem.CLEAN -> care(PetEngine::clean, Effect.CLEAN)
-            MenuItem.GARDEN -> panel = Panel.Garden
+            MenuItem.GARDEN -> panel = if (pet.ended == null) Panel.Garden() else blocked()
             null -> Unit
         }
         return false
@@ -367,6 +384,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         mini?.let { it.c(); return }
         if (panel is Panel.Ended) return
         if (panel is Panel.HowTo) { panel = Panel.PlayMenu(); return }
+        (panel as? Panel.Garden)?.let { if (it.picking) { panel = it.copy(picking = false); return } }
         if (panel != Panel.None) panel = Panel.None else selected = -1
     }
 
@@ -379,7 +397,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     private fun shopPress(p: Panel.Shop) {
         val item = Shop.items(p.tab, save).getOrNull(p.choice) ?: return
-        val (next, result) = Shop.press(save, item)
+        val (next, result) = Shop.press(save, item, now())
         commit(next)
         // the last purchase of a repeatable item takes it off the shelf: step back onto the list
         val left = Shop.items(p.tab, next).size
@@ -389,10 +407,67 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN\nYOUR GARDEN" }
             ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
             ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
-            ShopResult.TOO_POOR -> "NEED ${item.price - save.points}\nMORE POINTS"
+            ShopResult.TOO_POOR -> "NEED ${item.price - save.points} MORE ★"
             ShopResult.MAXED -> "????!"
         }
         panel = p.copy(choice = choice, note = note)
+    }
+
+    // ---------- garden ----------
+
+    /** Meal and snack, plus garden food when the pantry has some. */
+    fun feedChoices() = if (save.pantry.isEmpty()) 2 else 3
+
+    private fun gardenPress(p: Panel.Garden) {
+        val now = now()
+        if (p.picking) {
+            val crop = Garden.CROPS[p.seed]
+            commit(Garden.plant(save, p.plot, crop.id, now))
+            onSound(Chiptune.Sfx.C)
+            panel = p.copy(picking = false, note = "PLANTED!\nNOW WATER IT")
+            helpInGarden()
+            return
+        }
+        val plot = Garden.plots(save)[p.plot]
+        panel = when (Garden.state(plot, now)) {
+            PlotState.EMPTY -> p.copy(picking = true, note = "")
+            PlotState.DRY, PlotState.GROWING -> {
+                commit(Garden.water(save, p.plot, now))
+                onSound(Chiptune.Sfx.C)
+                helpInGarden()
+                p.copy(note = "WATERED! WET FOR\n${Garden.WET_MINUTES / 60} HOURS")
+            }
+            PlotState.RIPE -> {
+                val before = save.points
+                val (next, crop) = Garden.harvest(save, p.plot, now) ?: return
+                commit(next)
+                onSound(Chiptune.Sfx.ARRIVE)
+                helpInGarden()
+                p.copy(note = "+${next.points - before} ★!\n${crop.name} TO THE PANTRY")
+            }
+        }
+    }
+
+    /** The pet trots over to the bed and digs for a bit (when it's up and about). */
+    private fun helpInGarden() {
+        if (!canInteract() || walkMode) return
+        move = Move.GARDEN
+        moveUntil = System.currentTimeMillis() + 8_000L
+    }
+
+    private fun feedFromGarden() {
+        val (rest, crop) = Garden.takeFood(save) ?: return
+        val (after, outcome) = PetEngine.feedHarvest(pet)
+        when (outcome) {
+            Outcome.OK -> {
+                commit(rest.copy(pet = after))
+                panel = Panel.None
+                play(Effect.MEAL)
+                show("YUM! ${crop.name}", 1200)
+            }
+            Outcome.NOT_NEEDED -> { play(Effect.NO); show("I'M FULL!", 1500) }
+            Outcome.ASLEEP, Outcome.CANT -> panel = blocked()
+        }
     }
 
     // ---------- care ----------

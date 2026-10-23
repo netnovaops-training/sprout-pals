@@ -52,6 +52,31 @@ private val HATS = mapOf(
     ),
 )
 
+/** A shop outfit's picture in a 24x24-unit box: the hat, or a little shirt or pair of pants. */
+fun DrawScope.drawOutfitPreview(id: String, u: Float) {
+    // drawn at double size (u2) in a 12x12 grid
+    val u2 = u * 2
+    HATS[id]?.let { hat ->
+        val w = hat.grid.maxOf { it.length }
+        shaded(hat.grid, hat.pal, (12 - w) / 2, (12 - hat.grid.size) / 2, u2)
+        return
+    }
+    val cloth = CLOTHES[id]
+    if (cloth == null) {   // the mystery item
+        shaded(listOf(".QQQ.", "Q...Q", "...Q.", "..Q..", ".....", "..Q.."), mapOf('Q' to 0xFFE8B923L), 3, 3, u2)
+        return
+    }
+    val shape = if (Shop.byId(id)?.slot == Slot.PANTS) listOf("CCCCCCCC", "CCCCCCCC", "CCC..CCC", "CCC..CCC", "CCC..CCC", "CCC..CCC")
+        else listOf("CCC..CCC", "CCCCCCCC", "CCCCCCCC", ".CCCCCC.", ".CCCCCC.", ".CCCCCC.")
+    shape.forEachIndexed { y, row -> row.forEachIndexed { x, ch ->
+        if (ch != 'C') return@forEachIndexed
+        var c = cloth.color
+        if (cloth.pattern == Pattern.STRIPES && y % 2 == 1) c = cloth.second
+        if (cloth.pattern == Pattern.CHECK && (x + y) % 2 == 0) c = darker(c)
+        block(2 + x, 3 + y, 1, 1, c, u2)
+    } }
+}
+
 /** Draws the worn hat (if any) on the head. */
 fun DrawScope.drawHat(save: Save, box: CharBox, px: Float) {
     val hat = HATS[Shop.worn(save, Slot.HAT) ?: return] ?: return
@@ -88,6 +113,12 @@ fun clothesLayers(img: ImageBitmap, stage: Stage, save: Save): List<ImageBitmap>
         Shop.worn(save, Slot.SHIRT)?.let { id -> CLOTHES[id]?.let { layerCache.getOrPut(Triple(img, id, stage)) { recolor(img, chest, it) } } },
         Shop.worn(save, Slot.PANTS)?.let { id -> CLOTHES[id]?.let { layerCache.getOrPut(Triple(img, id, stage)) { recolor(img, legs, it) } } },
     )
+}
+
+/** The same colour at 72% brightness (the dark squares of a check). */
+private fun darker(c: Long): Long {
+    fun ch(shift: Int) = (((c shr shift) and 0xFF) * 72 / 100) shl shift
+    return 0xFF000000L or ch(16) or ch(8) or ch(0)
 }
 
 private fun r(c: Int) = (c shr 16) and 0xFF
