@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -22,11 +25,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.jasonagibson.sproutpals.app.Chiptune
@@ -43,37 +49,66 @@ private val INK = Color(0xFF1E2A1C)
 
 private val lcdText = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 20.sp, color = INK, textAlign = TextAlign.Center, lineHeight = 26.sp)
 
+// The cream console frame from Jason's reference picture: pixel hearts and food bowls at the
+// corners, chunky red / yellow / blue A-B-C buttons along the bottom.
+private val FRAME = Color(0xFFEDE6D3)
+private val FRAME_EDGE = Color(0xFF8A8F99)
+private val FRAME_INNER = Color(0xFF5E6470)
+private val BTN_A = Color(0xFFE5484D)
+private val BTN_B = Color(0xFFF5C542)
+private val BTN_C = Color(0xFF4A86E8)
+private val BTN_SHOP = Color(0xFFF08FB5)
+private val rainbowTitle = listOf(0xFFE0344B, 0xFFF2A3C0, 0xFFF2B33D, 0xFF5BC236, 0xFF3C7DD9, 0xFF8E6FE0)
+
 /**
- * The whole app is one "device": title, LCD, four buttons. Like the 90s egg,
- * everything is done with A (next), B (choose), C (back) - plus a Shop button.
+ * The whole app is one "device": a cream console frame around the garden screen.
+ * Top: happiness hearts, the food bowl (fills with hunger), the shop and the music note.
+ * Bottom: A (next), B (choose), C (back), and the sound switch.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PalScreen(game: Game, debug: Boolean, onUpdate: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().background(SHELL).padding(horizontal = 16.dp, vertical = 24.dp),
+        Modifier.fillMaxSize().background(FRAME).padding(horizontal = 14.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly,
     ) {
-        BasicText(
-            "SPROUT PALS",
-            style = lcdText.copy(color = CREAM, fontSize = 30.sp, letterSpacing = 3.sp),
-            modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { if (debug) game.timeWarp() }),
-        )
-
-        // Sound switches: tap to turn the tune or the beeps on and off.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Toggle("♪ MUSIC", game.save.musicOn) { game.toggleMusic() }
-            Toggle("🔊 SOUND", game.save.soundOn) { game.toggleSound() }
+        // ----- top bar -----
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val hearts = if (game.pet.stage == Stage.EGG) 0 else game.pet.happy
+            repeat(Rules.MAX_HEARTS) { i ->
+                PixelIcon(if (i < hearts) PixelArt.HEART else PixelArt.HEART_EMPTY, PixelArt.PAL, 26.dp)
+                Spacer(Modifier.size(2.dp))
+            }
+            Spacer(Modifier.size(6.dp))
+            val food = if (game.pet.stage == Stage.EGG) 0 else game.pet.hunger
+            PixelIcon(PixelArt.bowl(food), PixelArt.PAL_BLUE_BOWL, 34.dp)
+            Spacer(Modifier.weight(1f))
+            PixelIcon(PixelArt.bowl(4), PixelArt.PAL_PINK_BOWL, 34.dp, Modifier.clickable {
+                game.onSound(Chiptune.Sfx.SHOP); game.pressShop()
+            })
+            Spacer(Modifier.size(10.dp))
+            PixelIcon(PixelArt.NOTE, if (game.save.musicOn) PixelArt.PAL_NOTE_ON else PixelArt.PAL_OFF, 30.dp, Modifier.clickable { game.toggleMusic() })
         }
 
+        // ----- title, rainbow blocks like the reference -----
+        Row(Modifier.combinedClickable(onClick = {}, onLongClick = { if (debug) game.timeWarp() })) {
+            "SPROUT PALS".forEachIndexed { i, ch ->
+                BasicText(ch.toString(), style = lcdText.copy(fontSize = 30.sp, color = Color(rainbowTitle[i % rainbowTitle.size])))
+            }
+        }
+
+        // ----- the garden screen in its grey bezel -----
         Box(
             Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(SHELL_EDGE)
-                .padding(14.dp),
+                .clip(RoundedCornerShape(22.dp))
+                .background(FRAME_EDGE)
+                .padding(5.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(FRAME_INNER)
+                .padding(8.dp),
         ) {
-            Box(Modifier.fillMaxWidth().aspectRatio(LCD_W / LCD_H.toFloat()).border(4.dp, INK)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(LCD_W / LCD_H.toFloat()).clip(RoundedCornerShape(6.dp))) {
                 // Reading game.frame here makes the canvas redraw on every animation tick.
                 @Suppress("UNUSED_VARIABLE") val tick = game.frame
                 Canvas(Modifier.fillMaxSize()) { drawLcd(game) }
@@ -81,34 +116,125 @@ fun PalScreen(game: Game, debug: Boolean, onUpdate: () -> Unit) {
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            RoundButton("A", CREAM, onLong = { if (debug) game.debugWalk() }) {  game.onSound(Chiptune.Sfx.A);game.pressA() }
-            RoundButton("B", CREAM) { game.onSound(Chiptune.Sfx.B);
+        // ----- bottom bar: sound switch and the A / B / C buttons -----
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            PixelIcon(PixelArt.SPEAKER, if (game.save.soundOn) PixelArt.PAL_SPEAKER_ON else PixelArt.PAL_OFF, 30.dp, Modifier.clickable { game.toggleSound() })
+            Spacer(Modifier.weight(1f))
+            PillButton("A", BTN_A, onLong = { if (debug) game.debugWalk() }) { game.onSound(Chiptune.Sfx.A); game.pressA() }
+            Spacer(Modifier.size(10.dp))
+            PillButton("B", BTN_B) {
+                game.onSound(Chiptune.Sfx.B)
                 // Debug builds: B stands in for a shake, since an emulator can't be shaken.
                 if (debug && game.pet.stage == Stage.EGG && game.panel == Panel.None) game.onShake()
                 else if (game.pressB()) onUpdate()
             }
-            RoundButton("C", CREAM, onLong = { if (debug) game.debugBirthday() }) {  game.onSound(Chiptune.Sfx.C);game.pressC() }
-            RoundButton("SHOP", Color(0xFFF2B33D), small = true) {  game.onSound(Chiptune.Sfx.SHOP);game.pressShop() }
+            Spacer(Modifier.size(10.dp))
+            PillButton("C", BTN_C, onLong = { if (debug) game.debugBirthday() }) { game.onSound(Chiptune.Sfx.C); game.pressC() }
+            Spacer(Modifier.weight(1f))
+            PillButton("SHOP", BTN_SHOP, small = true) { game.onSound(Chiptune.Sfx.SHOP); game.pressShop() }
         }
         BasicText(
             "A next   B choose   C back",
-            style = lcdText.copy(color = CREAM.copy(alpha = 0.7f), fontSize = 13.sp),
+            style = lcdText.copy(color = FRAME_INNER, fontSize = 13.sp),
         )
     }
 }
 
+/** A chunky console button: colored pill with a dark outline and a darker bottom lip for depth. */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun RoundButton(label: String, color: Color, small: Boolean = false, onLong: () -> Unit = {}, onClick: () -> Unit) {
+private fun PillButton(label: String, color: Color, small: Boolean = false, onLong: () -> Unit = {}, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
     Box(
-        Modifier.size(72.dp).clip(CircleShape).background(SHELL_EDGE).padding(5.dp)
-            .clip(CircleShape).background(color)
+        Modifier.width(if (small) 74.dp else 66.dp).height(54.dp)
+            .clip(shape).background(INK).padding(3.dp)
+            .clip(RoundedCornerShape(9.dp)).background(color.copy(red = color.red * 0.72f, green = color.green * 0.72f, blue = color.blue * 0.72f))
+            .padding(bottom = 5.dp)
+            .clip(RoundedCornerShape(9.dp)).background(color)
             .combinedClickable(onClick = onClick, onLongClick = onLong),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(label, style = lcdText.copy(fontSize = if (small) 15.sp else 26.sp))
+        BasicText(label, style = lcdText.copy(fontSize = if (small) 15.sp else 24.sp))
     }
+}
+
+/** Draws a small text-grid icon (see [PixelArt]) with square pixels. */
+@Composable
+private fun PixelIcon(g: List<String>, pal: Map<Char, Long>, size: Dp, modifier: Modifier = Modifier) {
+    val cols = g.maxOf { it.length }
+    val rows = g.size
+    Canvas(modifier.width(size).height(size * rows / cols)) {
+        val p = this.size.width / cols
+        g.forEachIndexed { r, row ->
+            row.forEachIndexed { c, ch ->
+                val argb = pal[ch] ?: return@forEachIndexed
+                drawRect(Color(argb), Offset(c * p, r * p), Size(p + 0.6f, p + 0.6f))
+            }
+        }
+    }
+}
+
+/** The corner icons from the reference picture, as text grids. 'K' = dark outline. */
+private object PixelArt {
+    val HEART = listOf(
+        ".KK.KK.",
+        "KRRKRRK",
+        "KRWRRRK",
+        "KRRRRRK",
+        ".KRRRK.",
+        "..KRK..",
+        "...K...",
+    )
+    val HEART_EMPTY = listOf(
+        ".KK.KK.",
+        "K..K..K",
+        "K.....K",
+        "K.....K",
+        ".K...K.",
+        "..K.K..",
+        "...K...",
+    )
+    /** A food bowl; [level] 0-4 fills it with kibble, so it doubles as the hunger meter. */
+    fun bowl(level: Int): List<String> {
+        val empty = "............"
+        val full = listOf("....FFFF....", "..FFFFFFFF..", ".FFFFFFFFFF.")
+        // 0 = empty, 1-2 = a layer per heart, 3-4 = heaped
+        val layers = when (level) { 0 -> 0; 1 -> 1; 2 -> 2; else -> 3 }
+        val top = List(3 - layers) { empty } + full.takeLast(layers)
+        return top + listOf(
+            "KKKKKKKKKKKK",
+            "KBWBBBBBBBBK",
+            ".KBBBBBBBBK.",
+            "..KKKKKKKK..",
+        )
+    }
+    val NOTE = listOf(
+        "...KKKKKKK",
+        "...KNNNNNK",
+        "...KNKKKNK",
+        "...KNK.KNK",
+        "...KNK.KNK",
+        ".KKKNKKKNK",
+        "KNNNNKNNNK",
+        "KNNNKKNNNK",
+        ".KKK..KKK.",
+    )
+    val SPEAKER = listOf(
+        "....K.....",
+        "...KK...W.",
+        "KKKSK..W..",
+        "KSSSK.W..W",
+        "KSSSK.W..W",
+        "KKKSK..W..",
+        "...KK...W.",
+        "....K.....",
+    )
+    val PAL = mapOf('K' to 0xFF2B2B33, 'R' to 0xFFE0344B, 'W' to 0xFFFFFFFF)
+    val PAL_BLUE_BOWL = mapOf('K' to 0xFF2B2B33, 'B' to 0xFF3C9BE0, 'W' to 0xFFBFE4FF, 'F' to 0xFF8A5A2B)
+    val PAL_PINK_BOWL = mapOf('K' to 0xFF2B2B33, 'B' to 0xFFF08FB5, 'W' to 0xFFFFD6E6, 'F' to 0xFFC0703A)
+    val PAL_NOTE_ON = mapOf('K' to 0xFF2B2B33, 'N' to 0xFF8E6FE0)
+    val PAL_SPEAKER_ON = mapOf('K' to 0xFF2B2B33, 'S' to 0xFF3C9BE0, 'W' to 0xFF3C9BE0)
+    val PAL_OFF = mapOf('K' to 0xFF9A9AA2, 'N' to 0xFFD0D0D6, 'S' to 0xFFD0D0D6, 'W' to 0x00000000)
 }
 
 /** Words shown over the garden: menus, status pages, messages. Big monospace to match the pixels. */

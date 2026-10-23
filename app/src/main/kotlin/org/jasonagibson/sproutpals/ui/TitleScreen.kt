@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import org.jasonagibson.sproutpals.art.Sprites
+import org.jasonagibson.sproutpals.art.CharacterArt
 import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.engine.Stage
@@ -50,19 +50,22 @@ import org.jasonagibson.sproutpals.engine.Stage
 private const val W = 160
 private const val H = 112
 
-/** Fixed spot per character: x, ground line, and an animation phase so they don't move in lockstep. */
+/** Fixed spot per character: centre x, ground line, and an animation phase so they don't move in lockstep. */
 internal data class Spot(val species: Species, val x: Int, val ground: Int, val phase: Int)
 
+/** Title-scene units per character-picture pixel. */
+private const val TITLE_CHAR_SCALE = 0.75f
+
 internal val CAST = listOf(
-    // back row: the people
-    Spot(Species.KONA, 12, 76, 0),
-    Spot(Species.JASON, 64, 76, 1),
-    Spot(Species.JUN, 116, 76, 2),
+    // back row: the people, as in the reference picture
+    Spot(Species.KONA, 26, 72, 0),
+    Spot(Species.JASON, 80, 74, 1),
+    Spot(Species.JUN, 134, 72, 2),
     // front row: dogs on the outside, cats in the middle
-    Spot(Species.RUSTY, 2, 108, 3),
-    Spot(Species.MAUI, 44, 108, 1),
-    Spot(Species.DJ, 84, 108, 0),
-    Spot(Species.KARA, 126, 108, 2),
+    Spot(Species.RUSTY, 31, 110, 3),
+    Spot(Species.MAUI, 72, 108, 1),
+    Spot(Species.DJ, 99, 108, 0),
+    Spot(Species.KARA, 134, 110, 2),
 )
 
 private fun DrawScope.px(x: Int, y: Int, w: Int, h: Int, c: Long, p: Float) =
@@ -100,14 +103,15 @@ private fun DrawScope.drawTitleScene(frame: Int) {
 
     // the cast: same sprite + same palette every frame, only a small bob/hop
     for (spot in CAST) {
-        val body = Sprites.body(spot.species, Stage.ADULT)
-        val pal = Sprites.palette(spot.species, Stage.ADULT)
         val beat = (frame + spot.phase * 2) % 8
         val lift = if (spot.species.kind == Kind.HUMAN) listOf(0, 1, 2, 2, 1, 0, 0, 0)[beat] else listOf(0, 2, 4, 5, 4, 2, 0, 0)[beat]
-        val y = spot.ground - body.size + 1 - lift
-        // the two people on the right face inward; animals on the right look left
-        val flip = spot.x > W / 2 - 16
-        shaded(body, pal, spot.x, y, p, flip = flip)
+        // everyone keeps the pose and direction they have in the reference picture
+        character(
+            spot.species, Stage.ADULT,
+            centerX = spot.x.toFloat(), ground = (spot.ground - lift).toFloat(),
+            unitPx = p, unitsPerPixel = TITLE_CHAR_SCALE,
+            faceLeft = CharacterArt.facesLeft(spot.species),
+        )
     }
 }
 

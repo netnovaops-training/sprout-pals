@@ -7,7 +7,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import org.jasonagibson.sproutpals.app.Effect
 import org.jasonagibson.sproutpals.app.Game
 import org.jasonagibson.sproutpals.app.Move
+import org.jasonagibson.sproutpals.art.CharacterArt
 import org.jasonagibson.sproutpals.art.Grid
+import org.jasonagibson.sproutpals.engine.Kind
+import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.art.Icons
 import org.jasonagibson.sproutpals.art.Sprites
 import org.jasonagibson.sproutpals.art.x2
@@ -29,6 +32,16 @@ private const val AREA_H = 64
 private const val GROUND = AREA_TOP + 56
 /** Where the pet stands when petX = 0 (sprites are 32 wide). */
 private const val PET_X0 = 32
+/**
+ * How tall the pet stands on screen, by age (screen units; the garden is 64 tall).
+ * Cats and dogs are a bit lower to the ground than people, as in the reference picture.
+ * Sizing by target height keeps a baby cat big enough to see.
+ */
+private fun petScale(species: Species, stage: Stage): Float {
+    val target = when (stage) { Stage.BABY -> 26f; Stage.KID -> 36f; else -> 46f } *
+        if (species.kind == Kind.HUMAN) 1f else 0.82f
+    return target / CharacterArt.of(species, stage).height
+}
 /** The raised bed the pet gardens in, at the right. */
 private const val BED_X = 66
 
@@ -149,37 +162,48 @@ fun DrawScope.drawLcd(game: Game) {
     if (pet.ended != null) {
         grid(Sprites.SPROUT.x2(), Sprites.SPROUT_PALETTE, 40, GROUND - 13, px)
     } else if (!dark) {
-        var body = Sprites.body(pet.species, pet.stage)
-        if (walking && (f / 2) % 2 == 1) body = stride(body)
-        val pal = Sprites.palette(pet.species, pet.stage)
         var x = PET_X0 + game.petX
-        var y = GROUND - body.size + 1
-        when {
-            pet.stage == Stage.EGG -> {
-                // Idle: rock a few times, rest, rock again. Walking or shaking: it can't sit still.
-                x = PET_X0
-                val e = f / 2
-                when {
-                    game.effect == Effect.SHAKE -> x += if (f % 2 == 0) -4 else 4
-                    game.walkingNow -> { x += listOf(-2, -1, 0, 1, 2, 1, 0, -1)[f % 8]; if (f % 8 < 2) y -= 2 }
-                    e % 16 < 6 -> x += listOf(0, -1, -2, -1, 0, 1, 2, 1, 0, -1, -2, -1)[f % 12]
-                }
-            }
-            game.effect == Effect.HAPPY -> y -= listOf(0, 3, 6, 7, 6, 3, 0, 0)[f % 8]
-            game.effect == Effect.NO -> x += listOf(-2, -1, 0, 1, 2, 1, 0, -1)[f % 8]
-            pet.sleeping -> Unit
-            else -> y -= game.petLift
-        }
-        shaded(body, pal, x, y, px, flip = game.facingLeft)
+        var lift = 0
+        // the character's box on screen; the egg is a 32x19 grid, characters are pictures
+        val box: CharBox
         if (pet.stage == Stage.EGG) {
+            // Idle: rock a few times, rest, rock again. Walking or shaking: it can't sit still.
+            x = PET_X0
+            val e = f / 2
+            when {
+                game.effect == Effect.SHAKE -> x += if (f % 2 == 0) -4 else 4
+                game.walkingNow -> { x += listOf(-2, -1, 0, 1, 2, 1, 0, -1)[f % 8]; if (f % 8 < 2) lift = 2 }
+                e % 16 < 6 -> x += listOf(0, -1, -2, -1, 0, 1, 2, 1, 0, -1, -2, -1)[f % 12]
+            }
+            val egg = Sprites.EGG
+            val y = GROUND - egg.size + 1 - lift
+            shaded(egg, Sprites.EGG_PALETTE, x, y, px)
             // a zig-zag crack grows with each shake
             val crack = listOf(12 to 7, 13 to 8, 14 to 9, 15 to 8, 16 to 9, 17 to 10, 18 to 9, 19 to 10, 20 to 11)
             crack.take(pet.cracks * 3).forEach { (cx, cy) -> block(x + cx, y + cy, 1, 1, 0xFF3A2A1E, px) }
+            box = CharBox(x.toFloat(), y.toFloat(), 32f, egg.size.toFloat())
+        } else {
+            when {
+                game.effect == Effect.HAPPY -> lift = listOf(0, 3, 6, 7, 6, 3, 0, 0)[f % 8]
+                game.effect == Effect.NO -> x += listOf(-2, -1, 0, 1, 2, 1, 0, -1)[f % 8]
+                pet.sleeping -> Unit
+                else -> lift = game.petLift
+            }
+            // walking: a little side-to-side sway on alternate steps stands in for leg frames
+            val sway = if (walking) listOf(0f, 0.5f, 0f, -0.5f)[(f / 2) % 4] else 0f
+            box = character(
+                pet.species, pet.stage,
+                centerX = x + 16f + sway, ground = (GROUND + 1 - lift).toFloat(),
+                unitPx = px, unitsPerPixel = petScale(pet.species, pet.stage), faceLeft = game.facingLeft,
+            )
         }
+        val bx = box.left.toInt()
+        val by = box.top.toInt()
+        val bw = box.width.toInt()
 
         // gardening: a trowel in hand, digging in time with the bobbing
         if (game.move == Move.GARDEN && game.petX == game.gardenTo) {
-            grid(Sprites.TROWEL.x2(), Sprites.TROWEL_PALETTE, x + 30, GROUND - 10 + listOf(0, 0, 1, 3, 3, 2, 1, 0)[f % 8], px)
+            grid(Sprites.TROWEL.x2(), Sprites.TROWEL_PALETTE, bx + bw - 2, GROUND - 10 + listOf(0, 0, 1, 3, 3, 2, 1, 0)[f % 8], px)
             if (f % 8 == 4) block(BED_X + 2 + (f / 4) % 8, GROUND - 4, 2, 1, 0xFF5C3A1A, px)
         }
         // playing ball: it bounces between the pet and the left edge
@@ -192,8 +216,7 @@ fun DrawScope.drawLcd(game: Game) {
 
         if (game.birthdaySoon && !pet.sleeping) {
             // party hat on top of the head, and a little confetti
-            val top = body.indexOfFirst { row -> row.any { pal.containsKey(it) } }.coerceAtLeast(0)
-            grid(Sprites.PARTY_HAT.x2(), Sprites.PARTY_HAT_PALETTE, x + 9, y + top - 11, px)
+            grid(Sprites.PARTY_HAT.x2(), Sprites.PARTY_HAT_PALETTE, box.centerX.toInt() - 7, by - 10, px)
             val colors = listOf(0xFFE0344BL, 0xFFFFD84AL, 0xFF3C7DD9L, 0xFF5BC236L, 0xFFF2A3C0L)
             for (i in 0 until 8) {
                 val cx = (i * 23 + 5) % LCD_W
@@ -201,17 +224,17 @@ fun DrawScope.drawLcd(game: Game) {
                 block(cx, cy, 2, 2, colors[i % colors.size], px)
             }
         }
-        if (walking && f % 8 < 4) block(x + 2, GROUND - 1, 4, 2, 0xAAE6D3B0, px)   // dust behind the feet
+        if (walking && f % 8 < 4) block(bx - 2, GROUND - 1, 4, 2, 0xAAE6D3B0, px)   // dust behind the feet
 
-        if (pet.species.rare && pet.stage != Stage.EGG && f % 8 < 4) grid(Sprites.STAR.x2(), Sprites.STAR_PALETTE, x + 30, y - 2, px)
-        if (pet.sick && !pet.sleeping) grid(Sprites.SKULL.x2(), Sprites.SKULL_PALETTE, x - 12, y, px)
+        if (pet.species.rare && pet.stage != Stage.EGG && f % 8 < 4) grid(Sprites.STAR.x2(), Sprites.STAR_PALETTE, bx + bw, by - 2, px)
+        if (pet.sick && !pet.sleeping) grid(Sprites.SKULL.x2(), Sprites.SKULL_PALETTE, bx - 12, by, px)
         if (pet.sleeping) {
-            val zy = AREA_TOP + 6 - ((f / 2) % 3) * 2
-            block(x + 28, zy, 6, 2, Color.White, px); block(x + 30, zy + 2, 2, 2, Color.White, px); block(x + 28, zy + 4, 6, 2, Color.White, px)
+            val zy = (by - 4 - ((f / 2) % 3) * 2).coerceAtLeast(AREA_TOP + 2)
+            block(bx + bw, zy, 6, 2, Color.White, px); block(bx + bw + 2, zy + 2, 2, 2, Color.White, px); block(bx + bw, zy + 4, 6, 2, Color.White, px)
         }
 
         // food / pill appear next to the pet, shrinking as it eats
-        val side = if (game.facingLeft) x - 18 else x + 34
+        val side = if (game.facingLeft) bx - 18 else bx + bw + 2
         when (game.effect) {
             Effect.MEAL -> grid(Sprites.MEAL.drop((f % 12) / 4).x2(), Sprites.MEAL_PALETTE, side, GROUND - 9, px)
             Effect.SNACK -> grid(Sprites.SNACK.drop((f % 12) / 4).x2(), Sprites.SNACK_PALETTE, side, GROUND - 9, px)
@@ -241,17 +264,5 @@ fun DrawScope.drawLcd(game: Game) {
         val lit = !isAttention || (attention && (f / 4) % 2 == 0)
         if (lit) grid(icon.x2(), Icons.PALETTE, ix, iy, px)
         else grid(icon.x2(), Icons.PALETTE.mapValues { 0x33000000L }, ix, iy, px)
-    }
-}
-
-/**
- * Second walking frame: the feet (last three rows) step apart - left half one pixel
- * left, right half one pixel right - so alternating frames look like a stride.
- */
-private fun stride(g: Grid): Grid = g.mapIndexed { i, row ->
-    if (i < g.size - 3) row
-    else {
-        val half = row.length / 2
-        row.substring(1, half) + ".." + row.substring(half, row.length - 1)
     }
 }
