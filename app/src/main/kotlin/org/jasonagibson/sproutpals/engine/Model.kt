@@ -101,8 +101,12 @@ data class Save(
     val stopsReached: Int = 0,
     /** Things collected: walking-route prizes and shop items (ids). */
     val unlocked: List<String> = emptyList(),
-    /** Owned shop items the player has hidden from the garden. */
+    /** Owned creatures switched off in the shop. */
     val hidden: List<String> = emptyList(),
+    /** Outfits being worn: at most one hat, one shirt, one pair of pants. */
+    val wearing: List<String> = emptyList(),
+    /** Times the last creature-page item was bought. */
+    val mysteryCount: Int = 0,
     /** Day number of the last SHOP long press. */
     val secretDay: Long = -1,
     /** Button beeps and jingles. */

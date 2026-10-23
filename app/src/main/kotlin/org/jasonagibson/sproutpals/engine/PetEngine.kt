@@ -20,7 +20,8 @@ object Rules {
 
     /** Chance (in 100) that an egg is the rare one. */
     const val RARE_PERCENT = 1
-    const val RARE_PERCENT_MYSTERY = 15
+    const val RARE_STEP = 5
+    const val RARE_PERCENT_MAX = 15
     /** Item id for the shop's last listing. */
     const val MYSTERY_ITEM = "mystery"
 
@@ -89,13 +90,11 @@ object PetEngine {
     private val REGULAR = Species.entries.filter { !it.rare }
 
     /** The species for a new egg: one of the six with equal odds, or now and then the rare one. */
-    fun pickSpecies(rng: Random, mystery: Boolean = false): Species {
-        val rarePercent = if (mystery) Rules.RARE_PERCENT_MYSTERY else Rules.RARE_PERCENT
-        return if (rng.nextInt(100) < rarePercent) Species.JASON else REGULAR[rng.nextInt(REGULAR.size)]
-    }
+    fun pickSpecies(rng: Random, rarePercent: Int = Rules.RARE_PERCENT): Species =
+        if (rng.nextInt(100) < rarePercent) Species.JASON else REGULAR[rng.nextInt(REGULAR.size)]
 
-    fun newPet(now: Long, rng: Random, mystery: Boolean = false): PetState =
-        PetState(species = pickSpecies(rng, mystery), bornAt = now, lastTick = now)
+    fun newPet(now: Long, rng: Random, rarePercent: Int = Rules.RARE_PERCENT): PetState =
+        PetState(species = pickSpecies(rng, rarePercent), bornAt = now, lastTick = now)
 
     /** Plays minutes forward up to [to]. Caps catch-up at 20 days so a lost phone can't freeze the app. */
     fun advance(state: PetState, to: Long, zone: ZoneId, rng: Random): PetState {

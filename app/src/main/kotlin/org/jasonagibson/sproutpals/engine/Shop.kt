@@ -1,37 +1,96 @@
 package org.jasonagibson.sproutpals.engine
 
 /**
- * The shop: garden visitors bought with points (from steps, care and games). Once bought they
- * live in the garden for good - every pet, every life - and each can be shown or hidden.
+ * The shop, in two pages: CREATURES (garden visitors) and OUTFITS (worn by your pal).
+ * Bought with points from steps, care and games; once bought, they're yours for every pet and
+ * every life. Creatures: every one you own is out at once, each with its own on/off box.
+ * Outfits: one hat, one shirt and one pair of pants at a time. Prices climb down each page.
  */
-data class ShopItem(val id: String, val name: String, val price: Int, val blurb: String)
+enum class ShopTab(val title: String) { CREATURES("CREATURES"), OUTFITS("OUTFITS") }
 
-enum class ShopResult { BOUGHT, SHOWN, HIDDEN, TOO_POOR }
+/** Where an outfit goes. Shirts and pants are worn by people only. */
+enum class Slot { HAT, SHIRT, PANTS }
+
+data class ShopItem(
+    val id: String,
+    val name: String,
+    val price: Int,
+    val blurb: String,
+    val tab: ShopTab,
+    val slot: Slot? = null,
+    /** Can be bought more than once. */
+    val repeatable: Boolean = false,
+)
+
+enum class ShopResult { BOUGHT, SHOWN, HIDDEN, TOO_POOR, MAXED }
 
 object Shop {
-    /** Listed from the top, each one costing more than the one before (Jason, 10-23). */
+    private fun creature(id: String, name: String, price: Int, blurb: String) = ShopItem(id, name, price, blurb, ShopTab.CREATURES)
+    private fun outfit(id: String, name: String, price: Int, blurb: String, slot: Slot) = ShopItem(id, name, price, blurb, ShopTab.OUTFITS, slot)
+
     val ITEMS = listOf(
-        ShopItem("ladybug", "LADYBUG", 5, "Crawls along\nthe grass"),
-        ShopItem("butterfly", "BUTTERFLY", 8, "Flutters around\nyour pal"),
-        ShopItem("bee", "BUMBLEBEE", 10, "Buzzes from\nflower to flower"),
-        ShopItem("fireflies", "FIREFLIES", 12, "Glow at dusk\nand at night"),
-        ShopItem("bluebird", "BLUEBIRD", 15, "Hops and pecks\non the fence"),
-        ShopItem("bunny", "BUNNY", 20, "Hops across\nthe lawn"),
-        ShopItem("squirrel", "SQUIRREL", 25, "Scampers along\nthe fence"),
-        ShopItem("hummingbird", "HUMMINGBIRD", 30, "Hovers beside\nyour pal"),
-        ShopItem("deer", "DEER", 40, "Grazes at the\nback of the garden"),
-        ShopItem(Rules.MYSTERY_ITEM, "???", 50, "????"),
+        creature("ladybug", "LADYBUG", 5, "Crawls along\nthe grass"),
+        creature("butterfly", "BUTTERFLY", 8, "Flutters around\nyour pal"),
+        creature("bee", "BUMBLEBEE", 10, "Buzzes from\nflower to flower"),
+        creature("fireflies", "FIREFLIES", 12, "Glow at dusk\nand at night"),
+        creature("bluebird", "BLUEBIRD", 15, "Hops and pecks\non the fence"),
+        creature("bunny", "BUNNY", 20, "Hops across\nthe lawn"),
+        creature("squirrel", "SQUIRREL", 25, "Scampers along\nthe fence"),
+        creature("hummingbird", "HUMMINGBIRD", 30, "Hovers beside\nyour pal"),
+        creature("deer", "DEER", 40, "Grazes at the\nback of the garden"),
+        ShopItem(Rules.MYSTERY_ITEM, "???", 50, "????", ShopTab.CREATURES, repeatable = true),
+
+        outfit("flower_crown", "FLOWER CROWN", 10, "Fresh from\nthe garden", Slot.HAT),
+        outfit("green_tee", "GREEN TEE", 12, "Garden green\n(people only)", Slot.SHIRT),
+        outfit("bow", "BIG BOW", 15, "A bright\npink bow", Slot.HAT),
+        outfit("jeans", "BLUE JEANS", 18, "Good for digging\n(people only)", Slot.PANTS),
+        outfit("beanie", "BEANIE", 20, "Cozy for\ncold mornings", Slot.HAT),
+        outfit("flannel", "RED FLANNEL", 22, "Checked and cozy\n(people only)", Slot.SHIRT),
+        outfit("sun_hat", "SUN HAT", 25, "For long days\nin the sun", Slot.HAT),
+        outfit("raincoat", "RAINCOAT", 28, "Puddle-proof\n(people only)", Slot.SHIRT),
+        outfit("cowboy_hat", "COWBOY HAT", 30, "Yee-haw!", Slot.HAT),
+        outfit("work_pants", "WORK PANTS", 32, "Tough and brown\n(people only)", Slot.PANTS),
+        outfit("sweater", "STRIPED SWEATER", 35, "Stripes!\n(people only)", Slot.SHIRT),
+        outfit("crown", "GOLD CROWN", 45, "Garden royalty", Slot.HAT),
     )
 
-    fun owns(save: Save, id: String) = id in save.unlocked
-    fun showing(save: Save, id: String) = owns(save, id) && id !in save.hidden
+    /** How many times the repeatable item can be bought; after that it leaves the shop. */
+    const val MAX_REPEAT = 3
 
-    /** B on a shop item: buy it if you can afford it; if you already own it, show or hide it. */
-    fun press(save: Save, item: ShopItem): Pair<Save, ShopResult> = when {
-        owns(save, item.id) ->
-            if (item.id in save.hidden) save.copy(hidden = save.hidden - item.id) to ShopResult.SHOWN
-            else save.copy(hidden = save.hidden + item.id) to ShopResult.HIDDEN
-        save.points < item.price -> save to ShopResult.TOO_POOR
-        else -> save.copy(points = save.points - item.price, unlocked = save.unlocked + item.id) to ShopResult.BOUGHT
+    /** What's on a page right now: a repeatable item that has been bought out is gone. */
+    fun items(tab: ShopTab, save: Save) = ITEMS.filter { it.tab == tab && !(it.repeatable && save.mysteryCount >= MAX_REPEAT) }
+
+    fun byId(id: String) = ITEMS.firstOrNull { it.id == id }
+    fun owns(save: Save, id: String) = id in save.unlocked
+
+    /** Out in the garden (creatures) or being worn (outfits). */
+    fun showing(save: Save, id: String) = owns(save, id) &&
+        if (byId(id)?.slot != null) id in save.wearing else id !in save.hidden
+
+    /** The worn item for a slot, if any. */
+    fun worn(save: Save, slot: Slot) = save.wearing.firstOrNull { byId(it)?.slot == slot }
+
+    /** B on an item: buy it (it comes straight out), or switch one you own on or off. */
+    fun press(save: Save, item: ShopItem): Pair<Save, ShopResult> {
+        if (item.repeatable) {
+            if (save.mysteryCount >= MAX_REPEAT) return save to ShopResult.MAXED
+            if (save.points < item.price) return save to ShopResult.TOO_POOR
+            return save.copy(points = save.points - item.price, mysteryCount = save.mysteryCount + 1) to ShopResult.BOUGHT
+        }
+        if (owns(save, item.id)) {
+            return if (showing(save, item.id)) setOn(save, item, false) to ShopResult.HIDDEN
+            else setOn(save, item, true) to ShopResult.SHOWN
+        }
+        if (save.points < item.price) return save to ShopResult.TOO_POOR
+        val bought = save.copy(points = save.points - item.price, unlocked = save.unlocked + item.id)
+        return setOn(bought, item, true) to ShopResult.BOUGHT
     }
+
+    private fun setOn(save: Save, item: ShopItem, on: Boolean): Save {
+        val slot = item.slot ?: return if (on) save.copy(hidden = save.hidden - item.id) else save.copy(hidden = save.hidden + item.id)
+        val others = save.wearing.filter { byId(it)?.slot != slot }
+        return save.copy(wearing = if (on) others + item.id else others)
+    }
+
+    fun rarePercent(save: Save) = (Rules.RARE_PERCENT + Rules.RARE_STEP * save.mysteryCount).coerceAtMost(Rules.RARE_PERCENT_MAX)
 }

@@ -14,6 +14,7 @@ import org.jasonagibson.sproutpals.engine.Stage
 import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Shop
 import org.jasonagibson.sproutpals.engine.ShopResult
+import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.Steps
 import org.jasonagibson.sproutpals.engine.Stop
 import org.jasonagibson.sproutpals.engine.Walk
@@ -36,8 +37,8 @@ sealed interface Panel {
     data class Feed(val choice: Int = 0) : Panel
     data class Status(val page: Int = 0) : Panel
     data class Message(val text: String) : Panel
-    /** The shop, one item at a time: A next, B buy (or show/hide if owned), C close. */
-    data class Shop(val choice: Int = 0, val note: String = "") : Panel
+    /** The shop, one item at a time: A next, B buy / bring out / put away, SHOP other page, C close. */
+    data class Shop(val tab: ShopTab = ShopTab.CREATURES, val choice: Int = 0, val note: String = "") : Panel
     data object Garden : Panel
     /** Pick a game: A next, B start, C back. */
     data class PlayMenu(val choice: Int = 0) : Panel
@@ -321,7 +322,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         mini?.let { it.a(); return }
         when (val p = panel) {
             is Panel.PlayMenu -> panel = p.copy(choice = (p.choice + 1) % MiniGame.NAMES.size)
-            is Panel.Shop -> panel = Panel.Shop(choice = (p.choice + 1) % Shop.ITEMS.size)
+            is Panel.Shop -> panel = p.copy(choice = (p.choice + 1) % Shop.items(p.tab, save).size, note = "")
             is Panel.Feed -> panel = p.copy(choice = (p.choice + 1) % 2)
             // last page: A or B closes instead of looping back to the first (C closes any time)
             is Panel.Status -> panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1)
@@ -369,19 +370,29 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (panel != Panel.None) panel = Panel.None else selected = -1
     }
 
-    fun pressShop() { if (mini == null && panel !is Panel.Ended && panel !is Panel.Update) panel = Panel.Shop() }
+    /** SHOP opens the shop; inside the shop it flips between the Creatures and Outfits pages. */
+    fun pressShop() {
+        if (mini != null || panel is Panel.Ended || panel is Panel.Update) return
+        val p = panel
+        panel = if (p is Panel.Shop) Panel.Shop(tab = ShopTab.entries[(p.tab.ordinal + 1) % ShopTab.entries.size]) else Panel.Shop()
+    }
 
     private fun shopPress(p: Panel.Shop) {
-        val item = Shop.ITEMS[p.choice]
+        val item = Shop.items(p.tab, save).getOrNull(p.choice) ?: return
         val (next, result) = Shop.press(save, item)
         commit(next)
+        // the last purchase of a repeatable item takes it off the shelf: step back onto the list
+        val left = Shop.items(p.tab, next).size
+        val choice = p.choice.coerceAtMost(left - 1)
+        val wear = item.tab == ShopTab.OUTFITS
         val note = when (result) {
-            ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); "YOURS! IT'S IN\nYOUR GARDEN" }
-            ShopResult.SHOWN -> "BACK IN THE GARDEN"
+            ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN\nYOUR GARDEN" }
+            ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
             ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
             ShopResult.TOO_POOR -> "NEED ${item.price - save.points}\nMORE POINTS"
+            ShopResult.MAXED -> "????!"
         }
-        panel = p.copy(note = note)
+        panel = p.copy(choice = choice, note = note)
     }
 
     // ---------- care ----------
@@ -434,8 +445,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     }
 
     private fun newEgg() {
-        val mystery = Rules.MYSTERY_ITEM in save.unlocked
-        commit(save.copy(pet = PetEngine.newPet(now(), rng, mystery)))
+        commit(save.copy(pet = PetEngine.newPet(now(), rng, Shop.rarePercent(save))))
         panel = Panel.None
         selected = -1
     }

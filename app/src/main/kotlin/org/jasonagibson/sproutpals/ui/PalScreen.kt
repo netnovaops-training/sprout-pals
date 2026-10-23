@@ -44,6 +44,7 @@ import org.jasonagibson.sproutpals.engine.JumpRope
 import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Shop
+import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.TicTacToe
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
@@ -273,14 +274,20 @@ private fun PanelOverlay(game: Game) {
         is Panel.HowTo -> HOW_TO[p.game] + "\n\nB: START  C: BACK"
         is Panel.GameOver -> p.text + "\n\nB: PLAY AGAIN\nC: DONE"
         is Panel.Shop -> {
-            val item = Shop.ITEMS[p.choice]
-            val state = when {
-                !Shop.owns(game.save, item.id) -> "${item.price} POINTS · B: BUY"
-                Shop.showing(game.save, item.id) -> "OWNED · B: HIDE"
-                else -> "OWNED · B: SHOW"
+            val save = game.save
+            val items = Shop.items(p.tab, save)
+            val item = items[p.choice.coerceIn(0, items.size - 1)]
+            val wear = p.tab == ShopTab.OUTFITS
+            // ☑ = out / being worn, ☐ = yours but put away
+            val (box, state) = when {
+                item.repeatable -> "" to "${item.price} PTS · B: BUY" + if (save.mysteryCount > 0) "  (×${save.mysteryCount})" else ""
+                !Shop.owns(save, item.id) -> "" to "${item.price} PTS · B: BUY"
+                Shop.showing(save, item.id) -> "☑ " to "B: PUT AWAY"
+                else -> "☐ " to if (wear) "B: WEAR" else "B: BRING OUT"
             }
-            "SHOP   ★ ${game.save.points} PTS\n\n${p.choice + 1}/${Shop.ITEMS.size}  ${item.name}\n${item.blurb}\n\n$state" +
-                (if (p.note.isNotBlank()) "\n\n${p.note}" else "") + "\n\nA: NEXT  C: CLOSE"
+            val tabs = ShopTab.entries.joinToString("  ") { if (it == p.tab) "[${it.title}]" else it.title.lowercase() }
+            "★ ${save.points} PTS\n$tabs\n\n${p.choice + 1}/${items.size}  $box${item.name}\n${item.blurb}\n\n$state" +
+                (if (p.note.isNotBlank()) "\n${p.note}" else "") + "\n\nA: NEXT  SHOP: PAGE\nC: CLOSE"
         }
         Panel.Garden -> "GARDEN\nCOMING SOON!\n\nPLANT, GROW,\nHARVEST"
         Panel.Ended -> {

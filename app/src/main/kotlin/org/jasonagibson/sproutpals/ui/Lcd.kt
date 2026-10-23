@@ -246,6 +246,7 @@ fun DrawScope.drawLcd(game: Game) {
                 centerX = x + 16f + sway, ground = (GROUND + 1 - lift).toFloat(),
                 unitPx = px, unitsPerPixel = petScale(pet.species, pet.stage), faceLeft = game.facingLeft,
                 pose = poseFor(game, lift),
+                layers = { img -> if (pet.species.kind == Kind.HUMAN) clothesLayers(img, pet.stage, game.save) else emptyList() },
             )
         }
         val bx = box.left.toInt()
@@ -266,11 +267,14 @@ fun DrawScope.drawLcd(game: Game) {
         }
 
         // shop visitors that fly: in front of the pet, around its head
-        drawFrontCritters(game.save, f, AREA_TOP, GROUND, px, box.centerX.toInt(), by, night = sky == Sky.NIGHT || sky == Sky.SUNSET)
+        drawFrontCritters(game.save, f, AREA_TOP, GROUND, px, box.headX.toInt(), box.headTop.toInt(), night = sky == Sky.NIGHT || sky == Sky.SUNSET)
+
+        // the worn hat sits on the head (the birthday hat takes its place on birthday eve)
+        if (!(game.birthdaySoon && !pet.sleeping) && pet.stage != Stage.EGG) drawHat(game.save, box, px)
 
         if (game.birthdaySoon && !pet.sleeping) {
             // party hat on top of the head, and a little confetti
-            grid(Sprites.PARTY_HAT.x2(), Sprites.PARTY_HAT_PALETTE, box.centerX.toInt() - 7, by - 10, px)
+            grid(Sprites.PARTY_HAT.x2(), Sprites.PARTY_HAT_PALETTE, box.headX.toInt() - 7, box.headTop.toInt() - 10, px)
             val colors = listOf(0xFFE0344BL, 0xFFFFD84AL, 0xFF3C7DD9L, 0xFF5BC236L, 0xFFF2A3C0L)
             for (i in 0 until 8) {
                 val cx = (i * 23 + 5) % LCD_W

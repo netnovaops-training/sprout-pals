@@ -149,11 +149,11 @@ class PetEngineTest {
         assertTrue(PetEngine.smelly(s.copy(poopAge = Rules.SMELLY_AFTER)))
     }
 
-    @Test fun `rare odds with the flag set`() {
+    @Test fun `rare odds follow the given percent`() {
         val rng = Random(11)
         val n = 100_000
-        val jasons = (1..n).count { PetEngine.pickSpecies(rng, mystery = true) == Species.JASON }
-        assertTrue("got $jasons", jasons in 14_000..16_000)
+        val jasons = (1..n).count { PetEngine.pickSpecies(rng, rarePercent = 16) == Species.JASON }
+        assertTrue("got $jasons", jasons in 15_000..17_000)
     }
 
     @Test fun `an egg waits for a shake and never ages on its own`() {
