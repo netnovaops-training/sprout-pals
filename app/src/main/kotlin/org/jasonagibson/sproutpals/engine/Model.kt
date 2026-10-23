@@ -103,7 +103,7 @@ data class Save(
     val unlocked: List<String> = emptyList(),
     /** Owned shop items the player has hidden from the garden. */
     val hidden: List<String> = emptyList(),
-    /** Easter egg (hold SHOP): the day number it last paid out, so it pays once a day. */
+    /** Day number of the last SHOP long press. */
     val secretDay: Long = -1,
     /** Button beeps and jingles. */
     val soundOn: Boolean = true,

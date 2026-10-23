@@ -3,7 +3,6 @@ package org.jasonagibson.sproutpals.engine
 /**
  * The shop: garden visitors bought with points (from steps, care and games). Once bought they
  * live in the garden for good - every pet, every life - and each can be shown or hidden.
- * The "???" item has no visible effect: it quietly raises the rare-Jason odds (see PetEngine).
  */
 data class ShopItem(val id: String, val name: String, val price: Int, val blurb: String)
 

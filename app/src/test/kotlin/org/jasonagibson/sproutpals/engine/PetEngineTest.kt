@@ -149,7 +149,7 @@ class PetEngineTest {
         assertTrue(PetEngine.smelly(s.copy(poopAge = Rules.SMELLY_AFTER)))
     }
 
-    @Test fun `the mystery item makes rare Jason about 15 in 100`() {
+    @Test fun `rare odds with the flag set`() {
         val rng = Random(11)
         val n = 100_000
         val jasons = (1..n).count { PetEngine.pickSpecies(rng, mystery = true) == Species.JASON }

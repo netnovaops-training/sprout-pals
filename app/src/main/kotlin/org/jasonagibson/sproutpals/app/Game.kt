@@ -252,10 +252,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** Set by the activity: buzz + notification when a garden shop is reached. */
     var onArrive: (List<Stop>) -> Unit = {}
 
-    /**
-     * Easter egg (Jason, 10-23): hold the SHOP button. Pays 50 points once a day; ask again the
-     * same day and it just winks. Not mentioned anywhere in the app. Debug builds: every time.
-     */
+    /** Long press on the SHOP button. */
     fun secretPoints(debug: Boolean) {
         if (mini != null || panel is Panel.Ended) return
         val today = java.time.LocalDate.now(zone).toEpochDay()

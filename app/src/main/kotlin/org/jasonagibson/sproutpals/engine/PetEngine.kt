@@ -18,10 +18,10 @@ object Rules {
     const val LIFE_END = 14 * DAY
     const val SHAKES_TO_HATCH = 3
 
-    /** Chance (in 100) that an egg is the rare Jason; the shop's "???" item raises it. */
+    /** Chance (in 100) that an egg is the rare one. */
     const val RARE_PERCENT = 1
     const val RARE_PERCENT_MYSTERY = 15
-    /** The prize id of the mystery item. Its shop listing says only "???" and "????". */
+    /** Item id for the shop's last listing. */
     const val MYSTERY_ITEM = "mystery"
 
     // Sleeps 22:00-07:00 phone time. Nothing counts down while asleep.
@@ -88,10 +88,7 @@ object PetEngine {
 
     private val REGULAR = Species.entries.filter { !it.rare }
 
-    /**
-     * Secret Jason 1 egg in 100, otherwise one of the six with equal odds.
-     * Owning the shop's mystery item (shown only as "???" / "????") quietly makes it 15 in 100.
-     */
+    /** The species for a new egg: one of the six with equal odds, or now and then the rare one. */
     fun pickSpecies(rng: Random, mystery: Boolean = false): Species {
         val rarePercent = if (mystery) Rules.RARE_PERCENT_MYSTERY else Rules.RARE_PERCENT
         return if (rng.nextInt(100) < rarePercent) Species.JASON else REGULAR[rng.nextInt(REGULAR.size)]
