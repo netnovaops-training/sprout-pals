@@ -1,7 +1,10 @@
 package org.jasonagibson.sproutpals.app
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +36,28 @@ class MainActivity : ComponentActivity() {
 
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         startPedometer()
+        checkNotifications()
+    }
+
+    /** True when the phone won't show our notifications; PalScreen shows a "turn on" banner. */
+    private var notificationsOff by mutableStateOf(false)
+
+    private fun checkNotifications() {
+        val wasOff = notificationsOff
+        notificationsOff = !NotificationManagerCompat.from(this).areNotificationsEnabled()
+        // just switched on: one test notification, so it's clear they work
+        if (wasOff && !notificationsOff) ReminderWorker.hello(applicationContext)
+    }
+
+    /** The banner's tap: ask again if Android still allows it, otherwise open this app's notification settings. */
+    private fun enableNotifications() {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            askPermissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+        } else {
+            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,12 +85,15 @@ class MainActivity : ComponentActivity() {
                 g, debug = BuildConfig.DEBUG, onUpdate = { startUpdate(g) },
                 onShareCode = { shareCode(g) },
                 onAddFriend = { code -> addFriend(g, code) },
+                notificationsOff = notificationsOff,
+                onEnableNotifications = { enableNotifications() },
             )
         }
     }
 
     override fun onResume() {
         super.onResume()
+        checkNotifications()   // they may have just been switched on in Settings
         // Reload every time the app comes back: the reminder job may have moved the pet on.
         lifecycleScope.launch {
             val loaded = store.load()

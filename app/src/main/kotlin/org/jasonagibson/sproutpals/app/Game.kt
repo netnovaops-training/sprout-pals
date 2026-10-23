@@ -448,7 +448,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 onSound(Chiptune.Sfx.C)
                 helpInGarden()
                 val wet = Garden.wetMinutes(save, now)
-                p.copy(note = "WATERED! WET FOR\n${wet / 60}H${if (wet % 60 > 0) " ${wet % 60}M" else ""}")
+                if (wet == 0) p.copy(note = "❄ THE SOIL IS FROZEN!\nWAIT FOR THE THAW")
+                else p.copy(note = "WATERED! WET FOR\n${wet / 60}H${if (wet % 60 > 0) " ${wet % 60}M" else ""}")
             }
             PlotState.RIPE -> {
                 val before = save.points

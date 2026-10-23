@@ -65,6 +65,9 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE, req)
         }
 
+        /** Sent once when notifications get switched on, to show they work. */
+        fun hello(context: Context) = notify(context, "hello", "Notifications are on! Your pal will call you when it needs you.")
+
         private fun notify(context: Context, key: String, text: String) {
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
             val nm = context.getSystemService(NotificationManager::class.java)

@@ -54,6 +54,25 @@ class WeatherAndAlertsTest {
         assertEquals(radish.points * 2, Garden.harvestPoints(r, radish, at(12)))
     }
 
+    @Test fun `snow only falls in winter, and frozen soil can't be watered`() {
+        val rng = Random(9)
+        val summer = LocalDate.of(2027, 7, 1)
+        val july = (0L until 60).mapNotNull {
+            Weather.plan(Save(pet = pet), summer.plusDays(it).atTime(1, 0).atZone(zone).toInstant().toEpochMilli(), zone, rng).weather?.kind
+        }
+        assertFalse(WeatherKind.SNOW in july)
+        val jan = LocalDate.of(2027, 1, 1)
+        val winter = (0L until 60).mapNotNull {
+            Weather.plan(Save(pet = pet), jan.plusDays(it).atTime(1, 0).atZone(zone).toInstant().toEpochMilli(), zone, rng).weather?.kind
+        }
+        assertTrue(WeatherKind.SNOW in winter)
+        assertFalse(WeatherKind.RAIN in winter)
+
+        var s = Garden.plant(Save(pet = pet), 0, "radish", at(9))
+        s = s.copy(weather = WeatherEvent(WeatherKind.SNOW, at(10), at(16)))
+        assertEquals(s, Garden.water(s, 0, at(11)))
+    }
+
     @Test fun `alerts fire once and again only after clearing`() {
         val sick = Save(pet = pet.copy(sick = true))
         val (first, keys) = Alerts.fresh(sick, at(12), false)

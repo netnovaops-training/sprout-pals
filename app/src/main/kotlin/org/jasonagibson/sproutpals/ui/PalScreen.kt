@@ -83,6 +83,8 @@ fun PalScreen(
     onUpdate: () -> Unit,
     onShareCode: () -> Unit = {},
     onAddFriend: (String) -> Unit = {},
+    notificationsOff: Boolean = false,
+    onEnableNotifications: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxSize().background(FRAME).padding(horizontal = 14.dp, vertical = 18.dp),
@@ -115,6 +117,16 @@ fun PalScreen(
         }
 
         // ----- garden code: yours to share, and a box to type a friend's -----
+        if (notificationsOff) {
+            // without notifications nobody hears the pal call; one tap fixes it
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFFFD84A))
+                    .border(2.dp, INK, RoundedCornerShape(8.dp)).clickable { onEnableNotifications() }.padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText("🔔 TURN ON REMINDERS - TAP HERE", style = lcdText.copy(fontSize = 13.sp, lineHeight = 16.sp))
+            }
+        }
         GardenCodeBar(game, onShareCode, onAddFriend)
 
         // ----- the garden screen in its grey bezel -----

@@ -29,6 +29,17 @@ fun DrawScope.drawWeather(kind: WeatherKind, f: Int, top: Int, h: Int, px: Float
                 block(x, y, 1, 3, 0xDDB8E0FFL, px)
             }
         }
+        WeatherKind.SNOW -> {
+            block(0, top, LCD_W, h, 0x22DCEBFFL, px)
+            // a white blanket on the lawn, and big flakes drifting down and sideways
+            block(0, top + h - 10, LCD_W, 3, 0xCCF4F8FFL, px)
+            for (i in 0 until 40) {
+                val y = top + (i * 13 + f) % h
+                val x = (i * 37 + (3 * sin((f + i * 11) * 0.12)).toInt() + LCD_W) % LCD_W
+                val big = i % 3 == 0
+                block(x, y, if (big) 2 else 1, if (big) 2 else 1, 0xFFFFFFFFL, px)
+            }
+        }
         WeatherKind.RAINBOW -> {
             val colors = listOf(0x88E0344BL, 0x88F2912DL, 0x88FFD84AL, 0x885BC236L, 0x883C7DD9L, 0x888E6FE0L)
             colors.forEachIndexed { band, c ->

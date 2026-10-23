@@ -78,8 +78,9 @@ object Garden {
 
     fun water(save: Save, i: Int, now: Long): Save {
         val p = plots(save)[i]
-        if (p.crop == null) return save
-        return save.withPlot(i, p.copy(grown = grownAt(p, now), updatedAt = now, wetUntil = now + wetMinutes(save, now) * MINUTE))
+        val wet = wetMinutes(save, now)
+        if (p.crop == null || wet == 0) return save   // frozen soil: watering does nothing
+        return save.withPlot(i, p.copy(grown = grownAt(p, now), updatedAt = now, wetUntil = now + wet * MINUTE))
     }
 
     /** Picks a ripe crop: points, and one into the pantry. Returns null if it isn't ripe. */
@@ -94,7 +95,11 @@ object Garden {
     /** How long one watering keeps the soil wet: an hour more each for the ladybug and the rain barrel; half in a heat wave. */
     fun wetMinutes(save: Save, now: Long = 0L): Int {
         val m = WET_MINUTES + (if (Shop.showing(save, "ladybug")) 60 else 0) + (if (Shop.showing(save, "rain_barrel")) 60 else 0)
-        return if (Weather.now(save, now) == WeatherKind.HEAT) m / 2 else m
+        return when (Weather.now(save, now)) {
+            WeatherKind.HEAT -> m / 2
+            WeatherKind.SNOW -> 0   // frozen soil: the water just ices over
+            else -> m
+        }
     }
 
     /** Flowers on the lawn: the bees' plus two from the flower pots. */

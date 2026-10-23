@@ -286,7 +286,12 @@ fun DrawScope.drawLcd(game: Game) {
         if (PetEngine.smelly(pet) && !pet.sleeping) stink(bx + bw / 2 - 6, by + 4, f, px)
 
         if (pet.species.rare && pet.stage != Stage.EGG && f % 8 < 4) grid(Sprites.STAR.x2(), Sprites.STAR_PALETTE, bx + bw, by - 2, px)
-        if (pet.sick && !pet.sleeping) grid(Sprites.SKULL.x2(), Sprites.SKULL_PALETTE, bx - 12, by, px)
+        // sick: the bubble floats just above the head and bobs along wherever the pal goes
+        if (pet.sick && !pet.sleeping) {
+            val skull = Sprites.SKULL.x2()
+            val w = skull.maxOf { it.length }
+            grid(skull, Sprites.SKULL_PALETTE, box.headX.toInt() - w / 2, box.headTop.toInt() - skull.size - 3 - (if (f % 8 < 4) 0 else 1), px)
+        }
         if (pet.sleeping) {
             val zy = (by - 4 - ((f / 2) % 3) * 2).coerceAtLeast(AREA_TOP + 2)
             block(bx + bw, zy, 6, 2, Color.White, px); block(bx + bw + 2, zy + 2, 2, 2, Color.White, px); block(bx + bw, zy + 4, 6, 2, Color.White, px)

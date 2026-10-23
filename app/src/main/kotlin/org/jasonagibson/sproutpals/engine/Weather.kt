@@ -16,6 +16,8 @@ enum class WeatherKind(val good: Boolean, val icon: String, val title: String, v
     SUN(true, "☀", "WARM SUN", "+1 ♥ and +2 ★ on every harvest"),
     HEAT(false, "🔥", "HEAT WAVE", "Watering only lasts half as long"),
     STORM(false, "⛈", "STORM", "Creatures hide; crops may get flattened"),
+    /** Winter only (Nov-Mar), in place of rain: fun for the pal, but the soil freezes. */
+    SNOW(true, "❄", "SNOW DAY", "+1 ♥ playing; the soil freezes (no watering)"),
 }
 
 @Serializable
@@ -36,7 +38,10 @@ object Weather {
         if (save.weatherDay == day.toEpochDay()) return save
         val s = save.copy(weatherDay = day.toEpochDay())
         if (rng.nextInt(100) >= DAILY_CHANCE) return s
-        val kind = WeatherKind.entries[rng.nextInt(WeatherKind.entries.size)]
+        val winter = day.monthValue >= 11 || day.monthValue <= 3
+        val pool = WeatherKind.entries.filter { it != WeatherKind.SNOW }
+        val rolled = pool[rng.nextInt(pool.size)]
+        val kind = if (winter && rolled == WeatherKind.RAIN) WeatherKind.SNOW else rolled
         val start = day.atTime(8 + rng.nextInt(8), 0).atZone(zone).toInstant().toEpochMilli()
         return s.copy(weather = WeatherEvent(kind, start, start + HOURS * HOUR))
     }
@@ -51,7 +56,7 @@ object Weather {
             WeatherKind.RAIN -> s = s.copy(plots = Garden.plots(s).map { p ->
                 if (p.crop == null) p else p.copy(grown = Garden.grownAt(p, at), updatedAt = at, wetUntil = maxOf(p.wetUntil, w.end))
             })
-            WeatherKind.SUN -> if (alive) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
+            WeatherKind.SUN, WeatherKind.SNOW -> if (alive) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
             WeatherKind.STORM -> {
                 if (alive) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy - 1).coerceAtLeast(0)))
                 if (rng.nextInt(100) < 30) Garden.setBack(s, at, 60)?.let { s = it.first }
