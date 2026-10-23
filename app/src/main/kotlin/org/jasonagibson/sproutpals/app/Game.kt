@@ -357,10 +357,19 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     }
 
     private fun newEgg() {
-        commit(save.copy(pet = PetEngine.newPet(now(), rng)))
+        val mystery = Rules.MYSTERY_ITEM in save.unlocked
+        commit(save.copy(pet = PetEngine.newPet(now(), rng, mystery)))
         panel = Panel.None
         selected = -1
     }
+
+    // ---------- friends (garden codes) ----------
+
+    /** One line of news for the code bar: "Added ABC123!", "Can't reach the garden server..." */
+    var friendsNote by mutableStateOf<String?>(null)
+    var friendList by mutableStateOf<List<Friends.Friend>>(emptyList())
+
+    fun registered(code: String, token: String) = commit(save.copy(gardenCode = code, serverToken = token))
 
     private fun commit(s: Save) {
         save = s

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: allow plain HTTP to the emulator's view of this PC (10.0.2.2), for testing
+     against a friends server running locally. Release builds keep Android's HTTPS-only default. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/debug_network" />
+</manifest>

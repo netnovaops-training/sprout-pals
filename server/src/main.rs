@@ -8,7 +8,7 @@
 //! and hearts. No names, emails or locations.
 //!
 //! Runs behind Caddy at https://jasonagibson.zapto.org/game/api/ (no new open ports).
-//! Env: SPROUT_DB (default sprout.db), PORT (default 8020).
+//! Env: SPROUT_DB (default sprout.db), PORT (default 8020), BIND (default 0.0.0.0).
 
 mod api;
 mod store;
@@ -26,7 +26,9 @@ async fn main() {
     let store = store::Store::open(&format!("sqlite://{db}?mode=rwc")).await.expect("open database");
     let app = api::router(store);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    // BIND=127.0.0.1 for a local test on a PC; the container on the NUC listens on all of its own interfaces
+    let ip: std::net::IpAddr = std::env::var("BIND").ok().and_then(|b| b.parse().ok()).unwrap_or([0, 0, 0, 0].into());
+    let addr = SocketAddr::new(ip, port);
     tracing::info!("sprout-server listening on {addr}");
     let listener = tokio::net::TcpListener::bind(addr).await.expect("bind");
     axum::serve(listener, app)

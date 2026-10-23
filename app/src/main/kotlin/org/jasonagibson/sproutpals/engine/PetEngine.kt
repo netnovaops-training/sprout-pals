@@ -18,6 +18,12 @@ object Rules {
     const val LIFE_END = 14 * DAY
     const val SHAKES_TO_HATCH = 3
 
+    /** Chance (in 100) that an egg is the rare Jason; the shop's "???" item raises it. */
+    const val RARE_PERCENT = 1
+    const val RARE_PERCENT_MYSTERY = 15
+    /** The prize id of the mystery item. Its shop listing says only "???" and "????". */
+    const val MYSTERY_ITEM = "mystery"
+
     // Sleeps 22:00-07:00 phone time. Nothing counts down while asleep.
     const val SLEEP_FROM_HOUR = 22
     const val WAKE_HOUR = 7
@@ -82,12 +88,17 @@ object PetEngine {
 
     private val REGULAR = Species.entries.filter { !it.rare }
 
-    /** 1% secret Jason, otherwise one of the six with equal odds. */
-    fun pickSpecies(rng: Random): Species =
-        if (rng.nextInt(100) == 0) Species.JASON else REGULAR[rng.nextInt(REGULAR.size)]
+    /**
+     * Secret Jason 1 egg in 100, otherwise one of the six with equal odds.
+     * Owning the shop's mystery item (shown only as "???" / "????") quietly makes it 15 in 100.
+     */
+    fun pickSpecies(rng: Random, mystery: Boolean = false): Species {
+        val rarePercent = if (mystery) Rules.RARE_PERCENT_MYSTERY else Rules.RARE_PERCENT
+        return if (rng.nextInt(100) < rarePercent) Species.JASON else REGULAR[rng.nextInt(REGULAR.size)]
+    }
 
-    fun newPet(now: Long, rng: Random): PetState =
-        PetState(species = pickSpecies(rng), bornAt = now, lastTick = now)
+    fun newPet(now: Long, rng: Random, mystery: Boolean = false): PetState =
+        PetState(species = pickSpecies(rng, mystery), bornAt = now, lastTick = now)
 
     /** Plays minutes forward up to [to]. Caps catch-up at 20 days so a lost phone can't freeze the app. */
     fun advance(state: PetState, to: Long, zone: ZoneId, rng: Random): PetState {

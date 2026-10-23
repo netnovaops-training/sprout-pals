@@ -14,6 +14,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jasonagibson.sproutpals.BuildConfig
 import org.jasonagibson.sproutpals.art.CharacterArt
+import org.jasonagibson.sproutpals.engine.Stage
+import android.content.Intent
 import org.jasonagibson.sproutpals.ui.PalScreen
 import org.jasonagibson.sproutpals.ui.TitleScreen
 
@@ -27,6 +29,7 @@ class MainActivity : ComponentActivity() {
     private var showTitle by mutableStateOf(true)
     private val updater = Updater()
     private val chip = Chiptune()
+    private val friendsApi = Friends()
 
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         startPedometer()
@@ -53,7 +56,11 @@ class MainActivity : ComponentActivity() {
                     delay(125)
                 }
             }
-            PalScreen(g, debug = BuildConfig.DEBUG, onUpdate = { startUpdate(g) })
+            PalScreen(
+                g, debug = BuildConfig.DEBUG, onUpdate = { startUpdate(g) },
+                onShareCode = { shareCode(g) },
+                onAddFriend = { code -> addFriend(g, code) },
+            )
         }
     }
 
@@ -70,8 +77,49 @@ class MainActivity : ComponentActivity() {
             }
             startPedometer()
             shaker.start()
+            game?.let { syncFriends(it) }
             updater.check()?.let { game?.offerUpdate(it) }
         }
+    }
+
+    // ---------- friends server ----------
+
+    /** First time: get a garden code. Then: tell the server what our pet is, fetch friends and hearts. */
+    private suspend fun syncFriends(g: Game) {
+        if (g.save.serverToken == null) {
+            when (val r = friendsApi.register()) {
+                is Friends.Reply.Ok -> g.registered(r.value.code, r.value.token)
+                is Friends.Reply.Fail -> { g.friendsNote = r.message; return }
+            }
+        }
+        val token = g.save.serverToken ?: return
+        val pet = g.pet
+        friendsApi.setPet(token, if (pet.stage == Stage.EGG) "EGG" else pet.species.name, if (pet.ended != null) "GONE" else pet.stage.name)
+        (friendsApi.friends(token) as? Friends.Reply.Ok)?.let { g.friendList = it.value }
+        (friendsApi.inbox(token) as? Friends.Reply.Ok)?.value?.lastOrNull()?.let { h ->
+            g.friendsNote = "♥ from ${h.from}${if (h.message.isNotBlank()) ": ${h.message}" else ""}"
+        }
+    }
+
+    private fun addFriend(g: Game, code: String) {
+        val token = g.save.serverToken ?: run { g.friendsNote = "Still connecting to the garden server..."; return }
+        lifecycleScope.launch {
+            g.friendsNote = "Looking for $code..."
+            g.friendsNote = when (val r = friendsApi.addFriend(token, code)) {
+                is Friends.Reply.Ok -> {
+                    (friendsApi.friends(token) as? Friends.Reply.Ok)?.let { g.friendList = it.value }
+                    "Added ${r.value.code}! Your gardens are connected."
+                }
+                is Friends.Reply.Fail -> r.message
+            }
+        }
+    }
+
+    /** Android's share sheet: text it, email it, whatever the person likes. */
+    private fun shareCode(g: Game) {
+        val code = g.save.gardenCode ?: return
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, shareText(code))
+        startActivity(Intent.createChooser(send, "Share your garden code"))
     }
 
     override fun onPause() {

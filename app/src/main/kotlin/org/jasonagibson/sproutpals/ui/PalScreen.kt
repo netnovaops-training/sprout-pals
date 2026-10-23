@@ -67,7 +67,13 @@ private val rainbowTitle = listOf(0xFFE0344B, 0xFFF2A3C0, 0xFFF2B33D, 0xFF5BC236
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PalScreen(game: Game, debug: Boolean, onUpdate: () -> Unit) {
+fun PalScreen(
+    game: Game,
+    debug: Boolean,
+    onUpdate: () -> Unit,
+    onShareCode: () -> Unit = {},
+    onAddFriend: (String) -> Unit = {},
+) {
     Column(
         Modifier.fillMaxSize().background(FRAME).padding(horizontal = 14.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -97,6 +103,9 @@ fun PalScreen(game: Game, debug: Boolean, onUpdate: () -> Unit) {
                 BasicText(ch.toString(), style = lcdText.copy(fontSize = 30.sp, color = Color(rainbowTitle[i % rainbowTitle.size])))
             }
         }
+
+        // ----- garden code: yours to share, and a box to type a friend's -----
+        GardenCodeBar(game, onShareCode, onAddFriend)
 
         // ----- the garden screen in its grey bezel -----
         Box(

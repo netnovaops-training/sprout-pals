@@ -105,4 +105,8 @@ data class Save(
     val soundOn: Boolean = true,
     /** 8-bit background tune. */
     val musicOn: Boolean = true,
+    /** This garden's 6-letter code on the friends server (null until registered). */
+    val gardenCode: String? = null,
+    /** Secret for the friends server. Stays on this phone; never shown. */
+    val serverToken: String? = null,
 )
