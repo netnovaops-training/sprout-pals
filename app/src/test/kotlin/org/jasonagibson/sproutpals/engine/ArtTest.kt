@@ -17,10 +17,10 @@ class ArtTest {
         }
     }
 
-    @Test fun `every icon is 8 by 8`() {
+    @Test fun `every icon is 16 by 16`() {
         Icons.ALL.forEachIndexed { n, icon ->
-            assertEquals("icon $n rows", 8, icon.size)
-            icon.forEachIndexed { i, row -> assertEquals("icon $n row $i", 8, row.length) }
+            assertEquals("icon $n rows", 16, icon.size)
+            icon.forEachIndexed { i, row -> assertEquals("icon $n row $i", 16, row.length) }
         }
     }
 

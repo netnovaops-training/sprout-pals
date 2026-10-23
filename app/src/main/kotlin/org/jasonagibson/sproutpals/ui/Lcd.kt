@@ -302,13 +302,22 @@ fun DrawScope.drawLcd(game: Game) {
     block(0, 0, LCD_W, AREA_TOP, BAR, px)
     block(0, AREA_TOP + AREA_H, LCD_W, LCD_H - AREA_TOP - AREA_H, BAR, px)
     val attention = PetEngine.needsAttention(pet)
+    // thin dark rules between the bars and the garden
+    block(0, AREA_TOP - 1, LCD_W, 1, BAR_INK, px)
+    block(0, AREA_TOP + AREA_H, LCD_W, 1, BAR_INK, px)
     Icons.ALL.forEachIndexed { i, icon ->
         val ix = 4 + (i % 4) * 24
-        val iy = if (i < 4) 2 else AREA_TOP + AREA_H + 2
+        val iy = if (i < 4) 1 else AREA_TOP + AREA_H + 2
         val isAttention = i == 7
-        if (i == game.selected) block(ix - 2, iy - 2, 20, 20, BAR_INK, px)
-        val lit = !isAttention || (attention && (f / 4) % 2 == 0)
-        if (lit) grid(icon.x2(), Icons.PALETTE, ix, iy, px)
-        else grid(icon.x2(), Icons.PALETTE.mapValues { 0x33000000L }, ix, iy, px)
+        if (i == game.selected) {
+            // selected: a bright yellow tile with a dark frame
+            block(ix - 2, iy - 1, 20, 18, BAR_INK, px)
+            block(ix - 1, iy, 18, 16, 0xFFFFD84A, px)
+        }
+        when {
+            !isAttention -> shaded(icon, Icons.PALETTE, ix, iy, px)
+            attention && (f / 4) % 2 == 0 -> shaded(icon, Icons.PALETTE, ix, iy, px)
+            else -> grid(icon, Icons.PALETTE.mapValues { 0x40000000L }, ix, iy, px)   // faint when all's well
+        }
     }
 }

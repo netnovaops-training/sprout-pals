@@ -479,20 +479,155 @@ object Sprites {
     val TROWEL_PALETTE = mapOf('H' to 0xFF7A4A24, 'M' to 0xFFBFC4CC)
 }
 
-/** Menu icons (8x8, drawn doubled). Order matches [MenuItem]. */
+/**
+ * Menu icons, 16x16, in the same style as the characters: solid shapes in two or three tones
+ * (lower-case = shadow, L = highlight), drawn with the shaded outline. Order matches [MenuItem].
+ */
 object Icons {
-    private val STATUS = listOf("........", ".RR.RR..", "RRRRRRR.", "RRRRRRR.", ".RRRRR..", "..RRR...", "...R....", "........")
-    private val FEED = listOf("..W.W.W.", "..W.W.W.", "..WWWWW.", "...WWW..", "....W...", "....W...", "....W...", "....W...")
-    private val LIGHT = listOf("..YYYY..", ".YYYYYY.", ".YYYYYY.", ".YYYYYY.", "..YYYY..", "...GG...", "...GG...", "........")
-    private val PLAY = listOf("..BBBB..", ".BWBBWB.", "BBBBBBBB", "BWBBBBWB", "BBBBBBBB", ".BWBBWB.", "..BBBB..", "........")
-    private val MEDICINE = listOf("........", "..RRWW..", ".RRRWWW.", ".RRRWWW.", "..RRWW..", "........", "........", "........")
-    private val CLEAN = listOf("....YY..", "...YYYY.", "...YYKY.", "YY.YYYYO", "YYYYYYY.", ".YYYYYY.", "..YYYY..", "........")
-    private val GARDEN = listOf(".GG..GG.", "GGGG.GGG", ".GGGGGG.", "...GG...", "...GG...", "..DDDD..", ".DDDDDD.", "........")
-    private val ATTENTION = listOf("...RR...", "...RR...", "...RR...", "...RR...", "...RR...", "........", "...RR...", "...RR...")
+    private val BLANK = "................"
+
+    private val STATUS = listOf(
+        BLANK,
+        "..RRRR....RRRR..",
+        ".RRWWRR..RRRRRR.",
+        "RRWWRRRRRRRRRRRr",
+        "RRWRRRRRRRRRRRRr",
+        "RRRRRRRRRRRRRRRr",
+        "RRRRRRRRRRRRRRrr",
+        ".RRRRRRRRRRRRrr.",
+        "..RRRRRRRRRRrr..",
+        "...RRRRRRRRrr...",
+        "....RRRRRRrr....",
+        ".....RRRRrr.....",
+        "......RRrr......",
+        ".......rr.......",
+        BLANK, BLANK,
+    )
+    /** A bowl of kibble, steaming. */
+    private val FEED = listOf(
+        BLANK,
+        ".....w...w......",
+        "....w...w.......",
+        ".....w...w......",
+        BLANK,
+        "...FFFFFFFFFF...",
+        "..FfFFFfFFFfFF..",
+        ".FFFFFFFFFFFFFF.",
+        "BBBBBBBBBBBBBBBB",
+        "BLLBBBBBBBBBBBBb",
+        ".BLBBBBBBBBBBBb.",
+        "..BBBBBBBBBBBb..",
+        "...bbbbbbbbbb...",
+        BLANK, BLANK, BLANK,
+    )
+    private val LIGHT = listOf(
+        BLANK,
+        ".....YYYYYY.....",
+        "....YYWWYYYY....",
+        "...YYWWYYYYYY...",
+        "...YYWYYYYYYy...",
+        "...YYYYYYYYYy...",
+        "...YYYYYYYYyy...",
+        "....YYYYYYyy....",
+        ".....YYYYyy.....",
+        "......MMMM......",
+        "......mmmm......",
+        "......MMMM......",
+        ".......mm.......",
+        BLANK, BLANK, BLANK,
+    )
+    /** A beach ball. */
+    private val PLAY = listOf(
+        BLANK, BLANK,
+        "....RRRRWWWW....",
+        "...RRRRRWWWWB...",
+        "..RRRRRRWWWBBB..",
+        "..RWRRRRWWWBBB..",
+        ".RRRRRRYYWWBBBB.",
+        ".RRRRRYYYYWBBBB.",
+        ".rRRRRYYYYBBBBb.",
+        ".rrRRRRYYBBBBbb.",
+        "..rrRRRGGGBBbb..",
+        "..rrrRRGGGBbbb..",
+        "...rrrrGGGbbb...",
+        "....rrrrggbb....",
+        BLANK, BLANK,
+    )
+    /** A medicine bottle with a red cross. */
+    private val MEDICINE = listOf(
+        BLANK, BLANK,
+        "......CCCC......",
+        "......cccc......",
+        ".....WWWWWW.....",
+        "....WWWWWWWW....",
+        "....WLWWWWWW....",
+        "....WLWRRWWw....",
+        "....WLRRRRWw....",
+        "....WLRRRRWw....",
+        "....WLWRRWWw....",
+        "....WWWWWWWw....",
+        "....WWWWWWww....",
+        "....wwwwwwww....",
+        BLANK, BLANK,
+    )
+    /** The classic bath duck, bobbing in the water. */
+    private val CLEAN = listOf(
+        BLANK, BLANK,
+        "......YYYY......",
+        ".....YYYYYY.....",
+        ".....YYKYYY.....",
+        ".....YYYYYYOO...",
+        "......YYYYOO....",
+        "..Y...YYYY......",
+        "..YY.YYYYYYY....",
+        "..YYYYYWWYYYY...",
+        "..YYYYWWWYYYYy..",
+        "...YYYYYYYYYyy..",
+        "....yYYYYYYyy...",
+        ".....yyyyyyy....",
+        "..BBBBBBBBBBBB..",
+        ".BbBBBbBBBbBBBb.",
+    )
+    /** A sprout in a clay pot. */
+    private val GARDEN = listOf(
+        BLANK, BLANK,
+        "....GG....GG....",
+        "...GGGG..GGGG...",
+        "...GgGGG.GGgG...",
+        "....GgGG.GGg....",
+        "......GGGG......",
+        ".......GG.......",
+        ".......GG.......",
+        "....OOOOOOOO....",
+        "....OoOOOOOO....",
+        ".....OOOOOOo....",
+        ".....OOOOOOo....",
+        "......oooo......",
+        BLANK, BLANK,
+    )
+    private val ATTENTION = listOf(
+        BLANK, BLANK,
+        ".......RR.......",
+        "......RRRR......",
+        "......RRRR......",
+        "......RRRR......",
+        "......RRRr......",
+        ".......RR.......",
+        ".......RR.......",
+        ".......rr.......",
+        BLANK,
+        ".......RR.......",
+        "......RRRR......",
+        ".......rr.......",
+        BLANK, BLANK,
+    )
 
     val ALL = listOf(STATUS, FEED, LIGHT, PLAY, MEDICINE, CLEAN, GARDEN, ATTENTION)
     val PALETTE = mapOf(
-        'R' to 0xFFE0344B, 'W' to 0xFFEDEDED, 'Y' to 0xFFF2D06B, 'G' to 0xFF5BC236, 'B' to 0xFF3C7DD9,
-        'K' to 0xFF1B1B1B, 'O' to 0xFFE8912D, 'D' to 0xFF7A4A24,
+        'R' to 0xFFE0344B, 'r' to 0xFFA01E30, 'W' to 0xFFFFFFFF, 'w' to 0xFFDCE6F2, 'L' to 0xFFBFE4FF,
+        'F' to 0xFF8A5A2B, 'f' to 0xFF5C3A1A, 'B' to 0xFF3C9BE0, 'b' to 0xFF2A6FB0,
+        'Y' to 0xFFFFD84A, 'y' to 0xFFC9A93A, 'M' to 0xFFBFC4CC, 'm' to 0xFF8A8F99,
+        'G' to 0xFF5BC236, 'g' to 0xFF3E8F26, 'O' to 0xFFD07A3A, 'o' to 0xFF9A5226,
+        'C' to 0xFF3C7DD9, 'c' to 0xFF2A5AA8, 'K' to 0xFF1B1B1B,
     )
 }

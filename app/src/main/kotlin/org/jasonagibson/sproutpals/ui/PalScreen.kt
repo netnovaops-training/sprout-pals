@@ -244,6 +244,7 @@ private fun PanelOverlay(game: Game) {
         Panel.None -> {
             if (game.pet.stage == Stage.EGG && game.frame % 8 < 6) ShakeBanner()
             if (game.walkMode) GoingPlacesBanner(game)
+            if (game.selected >= 0) IconHint(game.selected)
             return
         }
         is Panel.Message -> p.text
@@ -321,6 +322,27 @@ private fun GoingPlacesBanner(game: Game) {
     Box(Modifier.fillMaxSize().padding(top = 44.dp, start = 10.dp), contentAlignment = Alignment.TopStart) {
         Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFA8743F)).border(2.dp, Color(0xFF5C3A1A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
             BasicText(text, style = lcdText.copy(color = Color(0xFFFFF3D6), fontSize = 11.sp, lineHeight = 13.sp))
+        }
+    }
+}
+
+/** What each menu icon does, shown as a label while it's selected (phones can't hover). */
+private val HINTS = listOf(
+    "STATUS · B: hunger, happiness, age",
+    "FEED · B: meal or snack",
+    "LIGHT · B: lights on / off",
+    "PLAY · B: play together",
+    "MEDICINE · B: when it's sick",
+    "CLEAN · B: wash the mess away",
+    "GARDEN · B: your garden & friends",
+)
+
+@Composable
+private fun IconHint(selected: Int) {
+    val text = HINTS.getOrNull(selected) ?: return
+    Box(Modifier.fillMaxSize().padding(top = 50.dp), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.clip(RoundedCornerShape(6.dp)).background(INK.copy(alpha = 0.86f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+            BasicText(text, style = lcdText.copy(color = Color(0xFFFFD84A), fontSize = 13.sp, lineHeight = 16.sp))
         }
     }
 }
