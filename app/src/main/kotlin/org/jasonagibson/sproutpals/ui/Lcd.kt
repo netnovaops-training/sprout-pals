@@ -11,6 +11,7 @@ import org.jasonagibson.sproutpals.art.CharacterArt
 import org.jasonagibson.sproutpals.art.Grid
 import org.jasonagibson.sproutpals.app.Panel
 import org.jasonagibson.sproutpals.engine.Kind
+import org.jasonagibson.sproutpals.engine.Weather
 import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.art.Icons
 import org.jasonagibson.sproutpals.art.Sprites
@@ -194,7 +195,8 @@ fun DrawScope.drawLcd(game: Game) {
 
     // ----- a mini-game takes over the garden while it runs -----
     val playing = game.mini
-    // shop visitors on the ground and fence stand behind the pet
+    // decor, then the ground and fence visitors, all behind the pet (not while walking: the scene scrolls)
+    if (playing == null && !dark && !walking) drawDecor(game.save, f, GROUND, px, night = sky == Sky.NIGHT || sky == Sky.SUNSET)
     if (playing == null && !dark) drawBackCritters(game.save, f, AREA_TOP, GROUND, px)
     if (playing != null) drawMiniGame(playing, pet, f, AREA_TOP, GROUND, px)
 
@@ -309,6 +311,9 @@ fun DrawScope.drawLcd(game: Game) {
             block(wx, AREA_TOP + 4, 4, AREA_H - 8, 0xCCFFFFFF, px)
         }
     }
+
+    // ----- weather over the whole garden -----
+    if (!dark && game.mini == null) Weather.now(game.save, game.now())?.let { drawWeather(it, f, AREA_TOP, AREA_H, px) }
 
     // ----- icon bars -----
     block(0, 0, LCD_W, AREA_TOP, BAR, px)

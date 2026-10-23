@@ -6,7 +6,7 @@ package org.jasonagibson.sproutpals.engine
  * every life. Creatures: every one you own is out at once, each with its own on/off box.
  * Outfits: one hat, one shirt and one pair of pants at a time. Prices climb down each page.
  */
-enum class ShopTab(val title: String) { CREATURES("CREATURES"), OUTFITS("OUTFITS") }
+enum class ShopTab(val title: String) { CREATURES("CREATURES"), OUTFITS("OUTFITS"), DECOR("DECOR") }
 
 /** Where an outfit goes. Shirts and pants are worn by people only. */
 enum class Slot { HAT, SHIRT, PANTS }
@@ -53,7 +53,19 @@ object Shop {
         outfit("work_pants", "WORK PANTS", 32, "Tough and brown\n(people only)", Slot.PANTS),
         outfit("sweater", "STRIPED SWEATER", 35, "Stripes!\n(people only)", Slot.SHIRT),
         outfit("crown", "GOLD CROWN", 45, "Garden royalty", Slot.HAT),
+
+        decor("flower_pots", "FLOWER POTS", 15, "Bright pots\nby the path"),
+        decor("gnome", "GARDEN GNOME", 30, "A lucky little\nfellow"),
+        decor("birdbath", "BIRDBATH", 45, "Birds love\na splash"),
+        decor("rain_barrel", "RAIN BARREL", 60, "Saves the rain\nfor the beds"),
+        decor("lantern", "LANTERN", 80, "A warm glow\nat night"),
+        decor("bench", "BENCH", 100, "A cozy spot\nto sit"),
+        decor("pond", "POND", 130, "Cool, calm\nwater"),
+        decor("well", "WISHING WELL", 170, "Make a wish..."),
+        decor("scarecrow", "SCARECROW", 220, "Keeps an eye\non the crops"),
     )
+
+    private fun decor(id: String, name: String, price: Int, blurb: String) = ShopItem(id, name, price, blurb, ShopTab.DECOR)
 
     /** How many times the repeatable item can be bought; after that it leaves the shop. */
     const val MAX_REPEAT = 3

@@ -97,7 +97,7 @@ fun DrawScope.drawItemPreview(id: String, f: Int, u: Float) {
             }
             return
         }
-        else -> { drawOutfitPreview(id, u); return }
+        else -> { if (!drawDecorPreview(id, u)) drawOutfitPreview(id, u); return }
     }
     // small sprites at double size; the deer is big enough as it is
     val g = frames[(f / 3) % frames.size]

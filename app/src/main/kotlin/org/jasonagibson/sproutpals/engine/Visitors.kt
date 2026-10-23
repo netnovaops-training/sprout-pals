@@ -36,6 +36,17 @@ object Visitors {
         "squirrel" to listOf(Perk("★", "Brings nuts: +2 ★"), LIFE, Perk("🌱", "Digs up seeds you just planted", false)),
         "hummingbird" to listOf(Perk("✚", "Can heal your pal when sick"), LIFE, Perk("💢", "Zips by and startles: -1 heart", false)),
         "deer" to listOf(Perk("⏳", "Longest life: +72 min a day"), Perk("🦌", "Calm garden, gentle company"), Perk("🍅", "Eats crops, ripe or growing", false)),
+
+        // decor: perks only, no catch
+        "flower_pots" to listOf(Perk("🌼", "+2 flowers: harvests pay more ★")),
+        "gnome" to listOf(Perk("★", "Lucky: +1 ★ on every harvest")),
+        "birdbath" to listOf(Perk("🍓", "Bluebird brings berries 2x as often")),
+        "rain_barrel" to listOf(Perk("💧", "Watering lasts 1 hour longer")),
+        "lantern" to listOf(Perk("🏮", "Glows at night"), Perk("🌙", "Fireflies can't keep your pal up")),
+        "bench" to listOf(Perk("🪑", "A cozy spot - just for looks")),
+        "pond" to listOf(Perk("💦", "Cool water: no more bee stings")),
+        "well" to listOf(Perk("✨", "About one wish a day: +3 ★")),
+        "scarecrow" to listOf(Perk("🌾", "Birds and deer raid crops half as often")),
     )
 
     /** Rolls every whole hour since the last time; returns the new save and what happened. */
@@ -50,6 +61,10 @@ object Visitors {
             val at = save.visitorsAt + (h + 1) * HOUR
             val hourOfDay = Instant.ofEpochMilli(at).atZone(zone).hour
             val night = hourOfDay >= 22 || hourOfDay < 7
+            s = Weather.plan(s, at, zone, rng)
+            val (w, weatherNews) = Weather.begin(s, at, rng)
+            s = w
+            if (weatherNews != null) news += weatherNews
             val (next, said) = hour(s, at, night, rng)
             s = next
             news += said
@@ -71,11 +86,22 @@ object Visitors {
         // creatures from before the time limit get their day starting now
         val fresh = out.filter { it !in s.outUntil }
         if (fresh.isNotEmpty()) s = s.copy(outUntil = s.outUntil + fresh.associateWith { at + Shop.OUT_HOURS * HOUR })
-        if (out.isEmpty()) return s to news
+        fun chance(pct: Int) = rng.nextInt(100) < pct
+        fun has(id: String) = Shop.showing(s, id)
+
+        // decor that does something on its own
+        if (has("well") && chance(4)) { s = s.copy(points = s.points + 3); news += "A WISH CAME TRUE\nAT THE WELL! +3 ★" }
+
+        // in a storm the creatures hide: no perks, no mischief
+        if (out.isEmpty() || Weather.now(s, at) == WeatherKind.STORM) return s to news
         val alive = s.pet.ended == null && s.pet.hatchedAt != null
         fun pet(f: (PetState) -> PetState) { if (alive) s = s.copy(pet = f(s.pet)) }
-        fun chance(pct: Int) = rng.nextInt(100) < pct
         val awake = !night
+        // decor that changes what the creatures do
+        val raid = if (has("scarecrow")) 2 else 1          // scarecrow: birds and deer raid half as often
+        val berry = if (has("birdbath")) 12 else 6         // birdbath: berries twice as often
+        val stings = !has("pond")                          // pond: no more stings
+        val lateNights = !has("lantern")                   // lantern: fireflies can't keep the pal up
 
         // a little longer life for every creature out
         if (alive) pet { it.copy(bonusLife = it.bonusLife + out.sumOf { id -> if (id == "deer") DEER_LIFE else LIFE_MINUTES }) }
@@ -90,15 +116,15 @@ object Visitors {
             }
             "bee" -> {
                 if (s.flowers < MAX_FLOWERS && chance(15)) s = s.copy(flowers = s.flowers + 1)
-                if (alive && awake && !s.pet.sick && chance(2)) { pet { it.copy(sick = true) }; news += "OUCH! A BEE STING.\nTIME FOR MEDICINE" }
+                if (stings && alive && awake && !s.pet.sick && chance(2)) { pet { it.copy(sick = true) }; news += "OUCH! A BEE STING.\nTIME FOR MEDICINE" }
             }
             "fireflies" -> if (night && alive) {
                 if (chance(10)) pet { it.copy(happy = (it.happy + 1).coerceAtMost(Rules.MAX_HEARTS)) }
-                if (chance(3)) { pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }; news += "THE FIREFLIES KEPT\nYOUR PAL UP LATE" }
+                if (lateNights && chance(3)) { pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }; news += "THE FIREFLIES KEPT\nYOUR PAL UP LATE" }
             }
             "bluebird" -> {
-                if (chance(6)) { s = s.copy(pantry = s.pantry + "strawberry"); news += "THE BLUEBIRD BROUGHT\nA BERRY!" }
-                if (chance(4)) Garden.loseRipe(s, at)?.let { s = it.first; news += "THE BLUEBIRD PECKED\nYOUR ${it.second.name}!" }
+                if (chance(berry)) { s = s.copy(pantry = s.pantry + "strawberry"); news += "THE BLUEBIRD BROUGHT\nA BERRY!" }
+                if (chance(4 / raid)) Garden.loseRipe(s, at)?.let { s = it.first; news += "THE BLUEBIRD PECKED\nYOUR ${it.second.name}!" }
             }
             "bunny" -> {
                 if (alive && awake && chance(8)) pet { it.copy(happy = (it.happy + 1).coerceAtMost(Rules.MAX_HEARTS)) }
@@ -112,7 +138,7 @@ object Visitors {
                 if (alive && s.pet.sick && chance(15)) { pet { it.copy(sick = false, sickMinutes = 0, doses = 0) }; news += "THE HUMMINGBIRD\nMADE YOUR PAL BETTER!" }
                 if (alive && awake && chance(3)) pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }
             }
-            "deer" -> if (chance(5)) {
+            "deer" -> if (rng.nextInt(100 * raid) < 5) {
                 (Garden.loseRipe(s, at) ?: Garden.setBack(s, at, 60))?.let { s = it.first; news += "THE DEER ATE SOME\nOF YOUR ${it.second.name}!" }
             }
         }

@@ -13,10 +13,10 @@ class VisitorsTest {
     private val pet = PetState(species = Species.JUN, bornAt = 0, lastTick = t0, hatchedAt = t0, stage = Stage.KID)
     private fun with(vararg ids: String) = Save(pet = pet, unlocked = ids.toList(), visitorsAt = t0)
 
-    @Test fun `no creatures, nothing happens`() {
-        val s = Save(pet = pet, visitorsAt = t0)
+    @Test fun `no creatures, nothing happens to the garden or the pal`() {
+        val s = Save(pet = pet, visitorsAt = t0, weatherDay = Long.MAX_VALUE)   // no weather either
         val (after, news) = Visitors.catchUp(s, t0 + 10 * hour, zone, Random(1))
-        assertEquals(s.copy(visitorsAt = t0 + 10 * hour), after)
+        assertEquals(s.copy(visitorsAt = t0 + 10 * hour), after.copy(weatherDay = Long.MAX_VALUE))
         assertTrue(news.isEmpty())
     }
 
@@ -28,10 +28,10 @@ class VisitorsTest {
         assertEquals(0, Visitors.catchUp(off, t0 + 10 * hour, zone, Random(1)).first.pet.bonusLife)
     }
 
-    @Test fun `over a long stretch bees grow flowers and squirrels bring points`() {
-        val (a, _) = Visitors.catchUp(with("bee", "squirrel"), t0 + 48 * hour, zone, Random(3))
-        assertTrue(a.flowers > 0)
-        assertTrue(a.points > 0)
+    @Test fun `over their day out bees grow flowers and squirrels bring stars`() {
+        val runs = (1..10).map { Visitors.catchUp(with("bee", "squirrel"), t0 + 23 * hour, zone, Random(it)).first }
+        assertTrue(runs.sumOf { it.flowers } > 0)
+        assertTrue(runs.sumOf { it.points } > 0)
     }
 
     @Test fun `bonus life keeps a pal going past two weeks`() {

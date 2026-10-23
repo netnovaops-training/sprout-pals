@@ -14,7 +14,10 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import org.jasonagibson.sproutpals.R
+import org.jasonagibson.sproutpals.engine.Alerts
 import org.jasonagibson.sproutpals.engine.PetEngine
+import org.jasonagibson.sproutpals.engine.Rules
+import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Steps
 import java.time.ZoneId
@@ -22,8 +25,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 /**
- * Every 15 minutes, even with the app closed: play the pet's life forward, collect steps,
- * and post a reminder if it needs you. Like the 90s beep, but quieter, and never at night.
+ * Every 15 minutes, even with the app closed: play the pet's life and the garden forward,
+ * collect steps, and post a notification for anything new that needs you (see [Alerts]):
+ * lights, sickness, hunger, mess, loneliness, birthday eve, ripe or thirsty crops, weather.
  */
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -35,21 +39,18 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         save = withPrizes
         Milestones.announce(applicationContext, arrived)
         val now = System.currentTimeMillis() + save.timeOffset
-        val pet = PetEngine.advance(save.pet, now, ZoneId.systemDefault(), Random.Default)
-        save = save.copy(pet = pet)
-        store.save(save)
+        val zone = ZoneId.systemDefault()
+        // the garden's hours (creatures, weather) and the pet's minutes, played forward
+        val (visited, news) = Visitors.catchUp(save, now, zone, Random.Default)
+        save = visited.copy(pet = PetEngine.advance(visited.pet, now, zone, Random.Default))
 
-        val name = pet.species.title
-        val text = when {
-            pet.ended != null -> "$name has returned to the garden."
-            pet.sleeping -> if (pet.lightsOn) "$name is trying to sleep. Lights off?" else null
-            pet.sick -> "$name is sick. Medicine time!"
-            pet.hunger == 0 -> "$name is hungry!"
-            pet.poops > 0 -> "$name made a mess. Time to clean."
-            pet.happy == 0 -> "$name is lonely. Come play!"
-            else -> null
-        }
-        if (text != null) notify(applicationContext, text)
+        // each alert once, until it clears; garden news as it happens
+        val eve = save.pet.hatchedAt?.let { Rules.birthdaySoon(now - it) } ?: false
+        val (fresh, keys) = Alerts.fresh(save, now, eve)
+        save = save.copy(notified = keys)
+        store.save(save)
+        fresh.forEach { notify(applicationContext, it.key, it.text) }
+        news.takeLast(2).forEach { notify(applicationContext, "news:$it", it.replace('\n', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }) }
         return Result.success()
     }
 
@@ -64,7 +65,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE, req)
         }
 
-        private fun notify(context: Context, text: String) {
+        private fun notify(context: Context, key: String, text: String) {
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
             val nm = context.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel(CHANNEL, "Your pal", NotificationManager.IMPORTANCE_DEFAULT))
@@ -79,8 +80,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build()
-            // One notification slot: a newer reminder replaces the older one instead of piling up.
-            nm.notify(1, n)
+            // One slot per kind of alert: a repeat replaces its own, different kinds sit side by side.
+            nm.notify(key.substringBefore(':').hashCode(), n)
         }
     }
 }

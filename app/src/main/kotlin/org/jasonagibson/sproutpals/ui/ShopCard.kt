@@ -105,8 +105,8 @@ fun ShopCard(game: Game, p: Panel.Shop) {
                     Spacer(Modifier.height(3.dp))
                     when {
                         !owned -> Chip("PRICE ★ ${item.price}" + if (item.repeatable && save.mysteryCount > 0) "  ×${save.mysteryCount}" else "", GOLD)
-                        on -> Chip(if (item.slot != null) "☑ WEARING" else "☑ OUT IN GARDEN", GOOD, CREAM)
-                        else -> Chip(if (item.slot != null) "☐ IN THE CLOSET" else "☐ AT HOME", CREAM)
+                        on -> Chip(if (item.slot != null) "☑ WEARING" else "☑ IN THE GARDEN", GOOD, CREAM)
+                        else -> Chip(when { item.slot != null -> "☐ IN THE CLOSET"; item.tab == ShopTab.DECOR -> "☐ IN THE SHED"; else -> "☐ AT HOME" }, CREAM)
                     }
                 }
             }
@@ -115,8 +115,8 @@ fun ShopCard(game: Game, p: Panel.Shop) {
             val perks = Visitors.PERKS[item.id]
             if (perks != null) {
                 Section("WHAT IT DOES", GOOD) { perks.filter { it.good }.forEach { PerkRow(it.icon, it.text, GOOD) } }
-                Section("THE CATCH", BAD) { perks.filter { !it.good }.forEach { PerkRow(it.icon, it.text, BAD) } }
-                if (on) BasicText("Goes home after ${Shop.OUT_HOURS}h - switch it on again", style = mono.copy(fontSize = 10.sp, color = INK.copy(alpha = 0.7f)))
+                if (perks.any { !it.good }) Section("THE CATCH", BAD) { perks.filter { !it.good }.forEach { PerkRow(it.icon, it.text, BAD) } }
+                if (on && item.tab == ShopTab.CREATURES) BasicText("Goes home after ${Shop.OUT_HOURS}h - switch it on again", style = mono.copy(fontSize = 10.sp, color = INK.copy(alpha = 0.7f)))
             } else if (item.slot != null) {
                 Section("WHAT IT DOES", GOOD) {
                     PerkRow("👕", when (item.slot) { Slot.HAT -> "Worn on the head"; Slot.SHIRT -> "Worn as a shirt (people)"; Slot.PANTS -> "Worn as pants (people)" }, GOOD)
@@ -131,8 +131,8 @@ fun ShopCard(game: Game, p: Panel.Shop) {
             // ── buttons
             val b = when {
                 !owned -> "B BUY"
-                on -> if (item.slot != null) "B TAKE OFF" else "B SEND HOME"
-                else -> if (item.slot != null) "B WEAR" else "B BRING OUT"
+                on -> when { item.slot != null -> "B TAKE OFF"; item.tab == ShopTab.DECOR -> "B PUT AWAY"; else -> "B SEND HOME" }
+                else -> when { item.slot != null -> "B WEAR"; item.tab == ShopTab.DECOR -> "B PUT OUT"; else -> "B BRING OUT" }
             }
             BasicText("A NEXT · $b · SHOP PAGE · C CLOSE", style = mono.copy(fontSize = 10.sp, textAlign = TextAlign.Center), modifier = Modifier.fillMaxWidth())
         }

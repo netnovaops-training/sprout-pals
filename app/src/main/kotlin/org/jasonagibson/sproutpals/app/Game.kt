@@ -21,6 +21,9 @@ import org.jasonagibson.sproutpals.engine.Steps
 import org.jasonagibson.sproutpals.engine.Stop
 import org.jasonagibson.sproutpals.engine.Walk
 import org.jasonagibson.sproutpals.engine.Visitors
+import org.jasonagibson.sproutpals.engine.Weather
+import org.jasonagibson.sproutpals.engine.WeatherEvent
+import org.jasonagibson.sproutpals.engine.WeatherKind
 import org.jasonagibson.sproutpals.engine.Walking
 import java.time.ZoneId
 import kotlin.random.Random
@@ -279,6 +282,15 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     }
 
     /** Debug builds (long-press C): jump the clock to 2 hours before the next birthday. */
+    /** Debug builds (long-press B): start the next kind of weather right now. */
+    fun debugWeather() {
+        val now = now()
+        val next = WeatherKind.entries[((save.weather?.kind?.ordinal ?: -1) + 1) % WeatherKind.entries.size]
+        val (s, news) = Weather.begin(save.copy(weather = WeatherEvent(next, now, now + Weather.HOURS * Rules.HOUR)), now, rng)
+        commit(s)
+        news?.let { show(it, 2500) }
+    }
+
     fun debugBirthday() {
         // Moves the hatch time back instead of the clock forward, so the pet doesn't
         // live through days of nobody feeding it.
@@ -404,7 +416,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val choice = p.choice.coerceAtMost(left - 1)
         val wear = item.tab == ShopTab.OUTFITS
         val note = when (result) {
-            ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN\nYOUR GARDEN" }
+            ShopResult.BOUGHT -> { onSound(Chiptune.Sfx.ARRIVE); if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN YOUR GARDEN" }
             ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
             ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
             ShopResult.TOO_POOR -> "NEED ${item.price - save.points} MORE ★"
@@ -435,7 +447,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 commit(Garden.water(save, p.plot, now))
                 onSound(Chiptune.Sfx.C)
                 helpInGarden()
-                p.copy(note = "WATERED! WET FOR\n${Garden.WET_MINUTES / 60} HOURS")
+                val wet = Garden.wetMinutes(save, now)
+                p.copy(note = "WATERED! WET FOR\n${wet / 60}H${if (wet % 60 > 0) " ${wet % 60}M" else ""}")
             }
             PlotState.RIPE -> {
                 val before = save.points

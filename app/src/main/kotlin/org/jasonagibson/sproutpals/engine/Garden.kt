@@ -79,7 +79,7 @@ object Garden {
     fun water(save: Save, i: Int, now: Long): Save {
         val p = plots(save)[i]
         if (p.crop == null) return save
-        return save.withPlot(i, p.copy(grown = grownAt(p, now), updatedAt = now, wetUntil = now + wetMinutes(save) * MINUTE))
+        return save.withPlot(i, p.copy(grown = grownAt(p, now), updatedAt = now, wetUntil = now + wetMinutes(save, now) * MINUTE))
     }
 
     /** Picks a ripe crop: points, and one into the pantry. Returns null if it isn't ripe. */
@@ -88,14 +88,27 @@ object Garden {
         val c = crop(p.crop) ?: return null
         if (state(p, now) != PlotState.RIPE) return null
         val pantry = save.pantry + c.id
-        return save.withPlot(i, Plot()).copy(points = save.points + harvestPoints(save, c), pantry = pantry) to c
+        return save.withPlot(i, Plot()).copy(points = save.points + harvestPoints(save, c, now), pantry = pantry) to c
     }
 
-    /** How long one watering keeps the soil wet: longer with the ladybug eating the aphids. */
-    fun wetMinutes(save: Save) = if (Shop.showing(save, "ladybug")) WET_MINUTES + 60 else WET_MINUTES
+    /** How long one watering keeps the soil wet: an hour more each for the ladybug and the rain barrel; half in a heat wave. */
+    fun wetMinutes(save: Save, now: Long = 0L): Int {
+        val m = WET_MINUTES + (if (Shop.showing(save, "ladybug")) 60 else 0) + (if (Shop.showing(save, "rain_barrel")) 60 else 0)
+        return if (Weather.now(save, now) == WeatherKind.HEAT) m / 2 else m
+    }
 
-    /** A crop's points, plus one for every two flowers the bees have grown. */
-    fun harvestPoints(save: Save, c: Crop) = c.points + save.flowers / 2
+    /** Flowers on the lawn: the bees' plus two from the flower pots. */
+    fun flowers(save: Save) = save.flowers + if (Shop.showing(save, "flower_pots")) 2 else 0
+
+    /** A crop's stars: +1 for every two flowers, +1 for the gnome; weather: +2 in warm sun, doubled under a rainbow. */
+    fun harvestPoints(save: Save, c: Crop, now: Long = 0L): Int {
+        val base = c.points + flowers(save) / 2 + (if (Shop.showing(save, "gnome")) 1 else 0)
+        return when (Weather.now(save, now)) {
+            WeatherKind.RAINBOW -> base * 2
+            WeatherKind.SUN -> base + 2
+            else -> base
+        }
+    }
 
     // ----- creature mischief (see Visitors) -----
 

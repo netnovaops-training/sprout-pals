@@ -116,6 +116,11 @@ data class Save(
     val flowers: Int = 0,
     /** The last whole hour the garden creatures were played through (see [Visitors]). */
     val visitorsAt: Long = 0,
+    /** Today's weather event, if one rolled, and the day (epoch day) it was rolled for. */
+    val weather: WeatherEvent? = null,
+    val weatherDay: Long = -1,
+    /** Phone notifications already sent and not yet dealt with (see Reminders). */
+    val notified: List<String> = emptyList(),
     /** Times the last creature-page item was bought. */
     val mysteryCount: Int = 0,
     /** Day number of the last SHOP long press. */

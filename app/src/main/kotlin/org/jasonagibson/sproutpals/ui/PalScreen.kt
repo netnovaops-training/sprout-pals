@@ -141,7 +141,7 @@ fun PalScreen(
             Spacer(Modifier.weight(1f))
             PillButton("A", BTN_A, onLong = { if (debug) game.debugWalk() }) { game.onSound(Chiptune.Sfx.A); game.pressA() }
             Spacer(Modifier.size(10.dp))
-            PillButton("B", BTN_B) {
+            PillButton("B", BTN_B, onLong = { if (debug) game.debugWeather() }) {
                 game.onSound(Chiptune.Sfx.B)
                 // Debug builds: B stands in for a shake, since an emulator can't be shaken.
                 if (debug && game.pet.stage == Stage.EGG && game.panel == Panel.None) game.onShake()
@@ -330,7 +330,7 @@ private fun gardenText(game: Game, p: Panel.Garden): String {
     val head = "GARDEN   PLOT ${p.plot + 1}/${Garden.PLOTS}\n\n"
     if (p.picking) {
         val list = Garden.CROPS.mapIndexed { i, c ->
-            (if (i == p.seed) "> " else "  ") + "${c.name.padEnd(10)} ⏱${hours(c.growMinutes).padEnd(3)} ★${Garden.harvestPoints(game.save, c)}"
+            (if (i == p.seed) "> " else "  ") + "${c.name.padEnd(10)} ⏱${hours(c.growMinutes).padEnd(3)} ★${Garden.harvestPoints(game.save, c, now)}"
         }.joinToString("\n")
         return head + "PICK A SEED\n$list\n\n⏱ = WET HOURS TO GROW\n★ = STARS AT HARVEST\n\nA: NEXT  B: PLANT\nC: BACK"
     }
@@ -363,7 +363,18 @@ private fun statusPage(game: Game, page: Int): String {
             if (next == null) "WALKED ${"%.0f".format(Route.miles(steps))} MI\n\nEVERY SHOP\nVISITED!"
             else "NEXT STOP\n${next.name.uppercase()}\n${next.town.uppercase()}\n\n${"%.1f".format(Route.milesToNext(steps))} MI TO GO"
         }
-        else -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
+        else -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\n" + weatherLine(game) + "\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
+    }
+}
+
+/** Today's weather for the status screen. */
+private fun weatherLine(game: Game): String {
+    val now = game.now()
+    val w = game.save.weather ?: return "CLEAR SKIES"
+    return when {
+        now < w.start -> "CLEAR SKIES"   // what's coming stays a surprise
+        now < w.end -> "${w.kind.icon} ${w.kind.title}\n${(w.end - now) / Rules.HOUR + 1}H LEFT"
+        else -> "CLEAR SKIES"
     }
 }
 
