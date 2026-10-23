@@ -219,6 +219,11 @@ object PetEngine {
         return s.copy(happy = (s.happy + 1).coerceAtMost(Rules.MAX_HEARTS), weight = s.weight + 2) to Outcome.OK
     }
 
+    /** After a mini-game: a heart back (if not already full) and a little exercise. Never refuses. */
+    fun played(s: PetState): PetState =
+        if (s.ended != null || s.stage == Stage.EGG) s
+        else s.copy(happy = (s.happy + 1).coerceAtMost(Rules.MAX_HEARTS), weight = (s.weight - 1).coerceAtLeast(1))
+
     fun play(s: PetState): Pair<PetState, Outcome> {
         canCare(s)?.let { return s to it }
         if (s.happy >= Rules.MAX_HEARTS) return s to Outcome.NOT_NEEDED

@@ -17,8 +17,8 @@ android {
         minSdk = 34
         targetSdk = 36
         // Bump on every release: the updater compares this number with version.json.
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
 
         // Where the game lives online: self-update files and the friends API.
         // Override for a test server with  ./gradlew -PserverBase=https://example.test/game ...

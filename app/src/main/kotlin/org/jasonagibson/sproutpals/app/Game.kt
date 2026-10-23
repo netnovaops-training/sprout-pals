@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.Outcome
 import org.jasonagibson.sproutpals.engine.PetEngine
 import org.jasonagibson.sproutpals.engine.PetState
@@ -35,6 +36,12 @@ sealed interface Panel {
     data class Message(val text: String) : Panel
     data object Shop : Panel
     data object Garden : Panel
+    /** Pick a game: A next, B start, C back. */
+    data class PlayMenu(val choice: Int = 0) : Panel
+    /** "How to play" card for the chosen game; B starts it. */
+    data class HowTo(val game: Int) : Panel
+    /** End-of-game card: what happened and what you earned. */
+    data class GameOver(val text: String) : Panel
     data object Ended : Panel
     data class Update(val info: Updater.Available, val progress: Int? = null, val error: String? = null) : Panel
 }
@@ -94,8 +101,12 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (realNow > effectUntil) effect = Effect.NONE
         if (panel is Panel.Message && realNow > messageUntil) panel = Panel.None
 
+        mini?.let { g ->
+            g.step()
+            if (g.over) finishGame(g)
+        }
         val beforeX = petX
-        animate(realNow)
+        if (mini == null) animate(realNow)
         moving = petX != beforeX
 
         val before = pet
@@ -263,11 +274,40 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     // ---------- buttons ----------
 
+    // ---------- mini-games ----------
+
+    /** The game being played right now, or null. While it runs, A/B/C go to the game. */
+    var mini by mutableStateOf<MiniGame?>(null); private set
+
+    private fun startGame(index: Int) {
+        panel = Panel.None
+        selected = -1
+        mini = MiniGame.start(index, rng)
+    }
+
+    /**
+     * Playing is always allowed, even with full hearts: the game still earns points, and a
+     * not-yet-happy pet gets a heart back. A little exercise trims the weight too.
+     */
+    private fun finishGame(g: MiniGame) {
+        mini = null
+        val earned = g.points()
+        val happier = pet.happy < Rules.MAX_HEARTS
+        commit(save.copy(pet = PetEngine.played(pet), points = save.points + earned))
+        onSound(if (earned > 0) Chiptune.Sfx.HATCH else Chiptune.Sfx.C)
+        panel = Panel.GameOver(
+            "${g.result}\n\n+$earned POINT${if (earned == 1) "" else "S"}" + if (happier) "\n+1 ♥" else "",
+        )
+    }
+
     /** A: next icon, or next choice inside a panel. */
     fun pressA() {
+        mini?.let { it.a(); return }
         when (val p = panel) {
+            is Panel.PlayMenu -> panel = p.copy(choice = (p.choice + 1) % MiniGame.NAMES.size)
             is Panel.Feed -> panel = p.copy(choice = (p.choice + 1) % 2)
-            is Panel.Status -> panel = p.copy(page = (p.page + 1) % STATUS_PAGES)
+            // last page: A or B closes instead of looping back to the first (C closes any time)
+            is Panel.Status -> panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1)
             Panel.None -> selected = (selected + 1) % MenuItem.entries.size
             else -> Unit
         }
@@ -275,9 +315,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     /** B: choose. Returns true when the update should start downloading. */
     fun pressB(): Boolean {
+        mini?.let { it.b(); return false }
         when (val p = panel) {
+            is Panel.PlayMenu -> { panel = Panel.HowTo(p.choice); return false }
+            is Panel.HowTo -> { startGame(p.game); return false }
+            is Panel.GameOver -> { panel = Panel.PlayMenu(); return false }   // B: play again
             is Panel.Feed -> { if (p.choice == 0) care(PetEngine::feedMeal, Effect.MEAL) else care(PetEngine::feedSnack, Effect.SNACK); return false }
-            is Panel.Status -> { panel = p.copy(page = (p.page + 1) % STATUS_PAGES); return false }
+            is Panel.Status -> { panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1); return false }
             Panel.Ended -> { newEgg(); return false }
             is Panel.Update -> return p.progress == null
             Panel.None -> Unit
@@ -290,7 +334,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 commit(save.copy(pet = PetEngine.toggleLights(pet)))
                 show(if (pet.lightsOn) "LIGHTS ON" else "LIGHTS OFF", 1200)
             }
-            MenuItem.PLAY -> care(PetEngine::play, Effect.HAPPY)
+            MenuItem.PLAY -> panel = if (canInteract()) Panel.PlayMenu() else blocked()
             MenuItem.MEDICINE -> care(PetEngine::medicine, Effect.PILL)
             MenuItem.CLEAN -> care(PetEngine::clean, Effect.CLEAN)
             MenuItem.GARDEN -> panel = Panel.Garden
@@ -301,11 +345,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     /** C: back / cancel. */
     fun pressC() {
+        mini?.let { it.c(); return }
         if (panel is Panel.Ended) return
+        if (panel is Panel.HowTo) { panel = Panel.PlayMenu(); return }
         if (panel != Panel.None) panel = Panel.None else selected = -1
     }
 
-    fun pressShop() { if (panel !is Panel.Ended && panel !is Panel.Update) panel = Panel.Shop }
+    fun pressShop() { if (mini == null && panel !is Panel.Ended && panel !is Panel.Update) panel = Panel.Shop }
 
     // ---------- care ----------
 

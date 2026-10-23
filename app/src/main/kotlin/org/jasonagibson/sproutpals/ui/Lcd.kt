@@ -192,8 +192,12 @@ fun DrawScope.drawLcd(game: Game) {
         }
     }
 
+    // ----- a mini-game takes over the garden while it runs -----
+    val playing = game.mini
+    if (playing != null) drawMiniGame(playing, pet, f, AREA_TOP, GROUND, px)
+
     // ----- the garden bed: the pet plants a seedling here when it feels like gardening -----
-    if (!dark && !walking) {
+    if (!dark && !walking && playing == null) {
         grid(Sprites.BED, Sprites.BED_PALETTE, BED_X, GROUND - 2, px)
         val phase = if (game.move == Move.GARDEN) game.gardenPhase else game.lastSeedling
         val seed = Sprites.SEEDLING[phase]
@@ -201,7 +205,9 @@ fun DrawScope.drawLcd(game: Game) {
     }
 
     // ----- the pet (or the sprout it left behind) -----
-    if (pet.ended != null) {
+    if (playing != null) {
+        Unit   // the game drew the pet
+    } else if (pet.ended != null) {
         grid(Sprites.SPROUT.x2(), Sprites.SPROUT_PALETTE, 40, GROUND - 13, px)
     } else if (!dark) {
         var x = PET_X0 + game.petX

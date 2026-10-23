@@ -38,7 +38,12 @@ import androidx.compose.ui.unit.sp
 import org.jasonagibson.sproutpals.app.Chiptune
 import org.jasonagibson.sproutpals.app.Game
 import org.jasonagibson.sproutpals.app.Panel
+import org.jasonagibson.sproutpals.engine.FruitCatch
+import org.jasonagibson.sproutpals.engine.HigherLower
+import org.jasonagibson.sproutpals.engine.JumpRope
+import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.Route
+import org.jasonagibson.sproutpals.engine.TicTacToe
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
 
@@ -251,6 +256,7 @@ private object PixelArt {
 private fun PanelOverlay(game: Game) {
     val text: String = when (val p = game.panel) {
         Panel.None -> {
+            game.mini?.let { GameHintStrip(it); return }
             if (game.pet.stage == Stage.EGG && game.frame % 8 < 6) ShakeBanner()
             if (game.walkMode) GoingPlacesBanner(game)
             if (game.selected >= 0) IconHint(game.selected)
@@ -258,7 +264,13 @@ private fun PanelOverlay(game: Game) {
         }
         is Panel.Message -> p.text
         is Panel.Feed -> (if (p.choice == 0) "> MEAL\n  SNACK" else "  MEAL\n> SNACK")
-        is Panel.Status -> statusPage(game, p.page)
+        is Panel.Status -> statusPage(game, p.page) +
+            if (game.pet.stage == Stage.EGG) "\n\nC: CLOSE"
+            else "\n\n${p.page + 1}/${Game.STATUS_PAGES}  " + if (p.page + 1 >= Game.STATUS_PAGES) "B: DONE" else "B: NEXT  C: CLOSE"
+        is Panel.PlayMenu -> "LET'S PLAY!\n\n" + MiniGame.NAMES.mapIndexed { i, n -> (if (i == p.choice) "> " else "  ") + n }.joinToString("\n") +
+            "\n\nA: NEXT  B: PICK"
+        is Panel.HowTo -> HOW_TO[p.game] + "\n\nB: START  C: BACK"
+        is Panel.GameOver -> p.text + "\n\nB: PLAY AGAIN\nC: DONE"
         Panel.Shop -> "SHOP\nOPENS SOON!\n\nPOINTS: ${game.save.points}"
         Panel.Garden -> "GARDEN\nCOMING SOON!\n\nPLANT, GROW,\nHARVEST"
         Panel.Ended -> {
@@ -279,6 +291,30 @@ private fun PanelOverlay(game: Game) {
 }
 
 private fun hearts(n: Int) = "♥".repeat(n) + "♡".repeat(Rules.MAX_HEARTS - n)
+
+/** The "how to play" card shown before each game starts. Same order as MiniGame.NAMES. */
+private val HOW_TO = listOf(
+    "FRUIT CATCH\n\nA ◀  move  ▶ C\nCatch the fruit,\ndodge the rocks!\n3 rocks = out",
+    "JUMP ROPE\n\nPress B to jump\njust as the rope\nreaches the feet.\nIt speeds up!",
+    "TIC-TAC-TOE\n\nYou are X.\nA / C: move\nB: place\nThree in a row wins",
+    "HIGHER/LOWER\n\nWill the next\nnumber be...\nA: HIGHER\nC: LOWER\n5 rounds",
+)
+
+/** While a game runs: its buttons, always in view at the top of the garden. */
+@Composable
+private fun GameHintStrip(g: MiniGame) {
+    val text = when (g) {
+        is FruitCatch -> "A ◀ MOVE ▶ C   ♥${"♥".repeat((g.lives - 1).coerceAtLeast(0))}  ⏱${g.timeLeft / 8}"
+        is JumpRope -> "B: JUMP!   JUMPS ${g.score}"
+        is TicTacToe -> "A/C: MOVE  B: PLACE"
+        is HigherLower -> "A: HIGHER  C: LOWER   ${g.round}/${g.rounds}"
+    }
+    Box(Modifier.fillMaxSize().padding(top = 50.dp), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.clip(RoundedCornerShape(6.dp)).background(INK.copy(alpha = 0.86f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+            BasicText(text, style = lcdText.copy(color = Color(0xFFFFD84A), fontSize = 13.sp, lineHeight = 16.sp))
+        }
+    }
+}
 
 private fun statusPage(game: Game, page: Int): String {
     val pet = game.pet
