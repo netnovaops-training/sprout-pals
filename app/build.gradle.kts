@@ -19,6 +19,11 @@ android {
         // Bump on every release: the updater compares this number with version.json.
         versionCode = 1
         versionName = "0.1"
+
+        // Where the game lives online: self-update files and the friends API.
+        // Override for a test server with  ./gradlew -PserverBase=https://example.test/game ...
+        val serverBase = (project.findProperty("serverBase") as String?) ?: "https://jasonagibson.zapto.org/game"
+        buildConfigField("String", "SERVER_BASE", "\"$serverBase\"")
     }
 
     buildTypes {

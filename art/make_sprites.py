@@ -21,6 +21,7 @@ from PIL import Image
 
 HERE = Path(__file__).parent
 frame_bgr = cv2.imread(str(HERE / "source" / "reference-frame.png"))
+frame2_bgr = cv2.imread(str(HERE / "source" / "reference-frame-2.png"))
 OUT = Path(sys.argv[1])
 BUILD = HERE / "build"
 BUILD.mkdir(exist_ok=True)
@@ -43,6 +44,61 @@ CAST = {
     "maui":  ((830, 290, 984, 417), [(850, 320, 940, 395)], [(955, 300, 990, 420)]),
     "dj":    ((1090, 338, 1230, 482), [(1110, 380, 1200, 455)], []),
 }
+
+
+# Segment Anything prompts: (box, points on the character, points on neighbours to leave out).
+# Better than GrabCut at white fur against the bright lawn; used when rembg[sam] is installed.
+# Kona and Jun come from the second frame (3.25 s into the video), where nobody stands in front of them.
+SAM_PROMPTS = {
+    "kona":  ((185, 165, 412, 505), [(280, 255), (285, 340), (385, 300), (250, 200), (265, 430), (250, 485), (310, 485)],
+              [(130, 300), (420, 420)], 2),
+    "jason": ((505, 277, 805, 620), [(640, 420), (640, 320), (770, 415), (560, 520), (620, 590), (680, 590)],
+              [(640, 268)]),
+    "jun":   ((912, 150, 1185, 492), [(1030, 260), (1050, 360), (935, 255), (1160, 285), (1040, 190), (1010, 440),
+                                      (1070, 440), (990, 465), (1075, 470)],
+              [(885, 350), (1150, 410), (1190, 320), (928, 205), (915, 290), (912, 240), (918, 275), (908, 320)], 2),
+    # extra points all over the white collar/ruff so none of it is left behind
+    "rusty": ((145, 285, 500, 612), [(330, 440), (410, 400), (430, 470), (200, 520), (195, 340), (330, 580), (440, 560),
+                                     (350, 470), (380, 500), (410, 520), (440, 500), (455, 460), (360, 420), (395, 440),
+                                     # his dark sable head, ears and the dark fur around the collar
+                                     (420, 325), (440, 345), (455, 385), (430, 365), (400, 380), (380, 410), (300, 400),
+                                     (470, 420)],
+              [(280, 330), (270, 250)]),
+    "kara":  ((785, 390, 1088, 625), [(980, 500), (850, 480), (900, 520), (1060, 420), (830, 600), (1000, 600)],
+              [(1020, 440)]),
+    "maui":  ((828, 288, 988, 420), [(880, 350), (930, 380), (860, 400)], [(985, 330)]),
+    "dj":    ((1088, 335, 1232, 485), [(1160, 410), (1215, 360), (1120, 460)], []),
+}
+_sam = None
+
+
+def sam_cutout(name):
+    """Cut [name] with Segment Anything; returns None if rembg's SAM model isn't available."""
+    global _sam
+    try:
+        from rembg import new_session, remove
+        if _sam is None:
+            _sam = new_session("sam")
+    except Exception:
+        return None
+    box, pos, neg, *which = SAM_PROMPTS[name]
+    prompt = [{"type": "rectangle", "label": 1, "data": list(box)}]
+    prompt += [{"type": "point", "label": 1, "data": list(p)} for p in pos]
+    prompt += [{"type": "point", "label": 0, "data": list(p)} for p in neg]
+    src = frame2_bgr if which and which[0] == 2 else frame_bgr
+    rgb = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
+    out = np.array(remove(Image.fromarray(rgb), session=_sam, sam_prompt=prompt)).copy()
+    x0, y0, x1, y1 = box
+    rgba = out[y0:y1, x0:x1].copy()
+    rgba[..., 3] = np.where(rgba[..., 3] > 127, 255, 0)
+    keep = (rgba[..., 3] > 0).astype(np.uint8)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(keep, 8)
+    if n > 1:
+        biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        rgba[labels != biggest, 3] = 0
+    rgba = strip_outside_green(rgba)
+    ys, xs = np.nonzero(rgba[..., 3])
+    return rgba[ys.min():ys.max() + 1, xs.min():xs.max() + 1].copy()
 
 
 def cutout(box, fg, bg):
@@ -157,19 +213,69 @@ def orange_to_brown(rgba):
     return rgba
 
 
+COLORS = 16      # per sprite; fewer colors = cleaner pixel art, less video noise
+
+
+def denoise(rgba):
+    """Video-compression speckle off the full-size cutout, edges kept sharp (bilateral filter)."""
+    out = rgba.copy()
+    rgb = np.ascontiguousarray(rgba[..., :3])
+    out[..., :3] = cv2.bilateralFilter(cv2.medianBlur(rgb, 3), 7, 40, 7)
+    return out
+
+
+def tidy_alpha(a):
+    """Drop lone pixels (fewer than 2 solid neighbours) and fill pinholes (3+ solid neighbours)."""
+    on = (a > 0).astype(np.uint8)
+    pad = np.pad(on, 1)
+    n = (pad[:-2, 1:-1] + pad[2:, 1:-1] + pad[1:-1, :-2] + pad[1:-1, 2:])
+    on = np.where((on == 1) & (n < 2), 0, on)
+    on = np.where((on == 0) & (n >= 3), 1, on)
+    return on * 255
+
+
+def outline(arr):
+    """SNES-style dark outline: transparent pixels touching the sprite take a dark version of the
+    neighbouring color. The sprite gets 1 pixel bigger on every side."""
+    arr = np.pad(arr, ((1, 1), (1, 1), (0, 0)))
+    on = arr[..., 3] > 0
+    h, w = on.shape
+    out = arr.copy()
+    for y in range(h):
+        for x in range(w):
+            if on[y, x]:
+                continue
+            for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < h and 0 <= nx < w and on[ny, nx]:
+                    out[y, x, :3] = (arr[ny, nx, :3] * 0.30).astype(np.uint8)
+                    out[y, x, 3] = 255
+                    break
+    return out
+
+
 def pixelate(rgba):
-    im = Image.fromarray(rgba, "RGBA").convert("RGBa")       # premultiplied: no halo from old background
+    clean = denoise(rgba)
+    im = Image.fromarray(clean, "RGBA").convert("RGBa")       # premultiplied: no halo from old background
     w, h = max(1, round(im.width * SCALE)), max(1, round(im.height * SCALE))
     small = im.resize((w, h), Image.Resampling.BOX).convert("RGBA")
     arr = np.array(small)
     arr[..., 3] = np.where(arr[..., 3] >= 120, 255, 0)
-    q = Image.fromarray(arr[..., :3]).quantize(colors=32, method=Image.Quantize.MEDIANCUT).convert("RGB")
+    arr[..., 3] = tidy_alpha(arr[..., 3])
+    solid = arr[..., 3] > 0
+    q = Image.fromarray(arr[..., :3]).quantize(colors=COLORS, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
     arr[..., :3] = np.array(q)
-    arr[arr[..., 3] == 0, :3] = 0
-    return Image.fromarray(arr, "RGBA")
+    arr[~solid, :3] = 0
+    return Image.fromarray(outline(arr), "RGBA")
 
 
-cuts = {name: cutout(box, fg, bg) for name, (box, fg, bg) in CAST.items()}
+cuts = {}
+used_sam = {}
+for name, (box, fg, bg) in CAST.items():
+    c = sam_cutout(name)
+    used_sam[name] = c is not None
+    cuts[name] = c if c is not None else cutout(box, fg, bg)
+    print(f"{name:6s} cut with {'Segment Anything' if c is not None else 'GrabCut'}")
 
 # Nobody but Kona (scarf) and DJ (eyes) has green on them, so any green left inside
 # the others is background showing through a gap - clear it.
@@ -184,6 +290,29 @@ for name in ("jason", "jun", "rusty", "kara", "maui"):
     edge = strip_outside_green(c.copy())[..., 3] == 0
     c[edge, 3] = 0
 cuts["maui"] = orange_to_brown(cuts["maui"])
+
+
+def fill_holes(rgba):
+    """See-through specks fully enclosed by the body are segmentation misses, not real gaps:
+    paint them from the surrounding fur and make them solid. (Not used on the people, whose
+    arm-to-body gaps are real.)"""
+    clear = (rgba[..., 3] == 0).astype(np.uint8)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(clear, 4)
+    h, w = clear.shape
+    holes = np.zeros_like(clear)
+    for i in range(1, n):
+        x, y, bw, bh, area = stats[i]
+        touches_edge = x == 0 or y == 0 or x + bw >= w or y + bh >= h
+        if not touches_edge and area < 400:
+            holes[labels == i] = 1
+    rgb = cv2.inpaint(np.ascontiguousarray(rgba[..., :3]), holes, 3, cv2.INPAINT_TELEA)
+    rgba[..., :3] = np.where(holes[..., None] == 1, rgb, rgba[..., :3])
+    rgba[holes == 1, 3] = 255
+    return rgba
+
+
+for name in ("rusty", "kara", "maui", "dj"):
+    cuts[name] = fill_holes(cuts[name])
 
 # Jason's jeans and sneakers, from just below his hands down: the donor legs for Kona and Jun.
 j = cuts["jason"]
@@ -200,8 +329,11 @@ jun_legs = recolor(legs, [(NAVY[0], NAVY[1], 40, 0, 255, (90, 135, 200))])
 jun_legs = recolor(jun_legs, [(0, 179, 0, 200, 255, (110, 70, 36))])
 kona_legs = recolor(legs, [(NAVY[0], NAVY[1], 40, 0, 255, (70, 70, 88))])
 kona_legs = recolor(kona_legs, [(0, 179, 0, 200, 255, (110, 70, 36))])
-cuts["jun"] = with_legs(cuts["jun"], jun_legs)
-cuts["kona"] = with_legs(cuts["kona"], kona_legs)
+# Only needed when Kona or Jun had to come from the first frame (GrabCut fallback), where they're hidden from the waist down.
+if not used_sam.get("jun"):
+    cuts["jun"] = with_legs(cuts["jun"], jun_legs)
+if not used_sam.get("kona"):
+    cuts["kona"] = with_legs(cuts["kona"], kona_legs)
 
 # Each life stage is cut from the same picture at a different size, so a baby is a small
 # version of its grown-up self - and nobody can ever turn into someone else.

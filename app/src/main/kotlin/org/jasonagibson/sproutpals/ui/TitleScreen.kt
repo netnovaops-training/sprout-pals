@@ -53,9 +53,6 @@ private const val H = 112
 /** Fixed spot per character: centre x, ground line, and an animation phase so they don't move in lockstep. */
 internal data class Spot(val species: Species, val x: Int, val ground: Int, val phase: Int)
 
-/** Title-scene units per character-picture pixel. */
-private const val TITLE_CHAR_SCALE = 0.75f
-
 internal val CAST = listOf(
     // back row: the people, as in the reference picture
     Spot(Species.KONA, 26, 72, 0),
@@ -105,12 +102,16 @@ private fun DrawScope.drawTitleScene(frame: Int) {
     for (spot in CAST) {
         val beat = (frame + spot.phase * 2) % 8
         val lift = if (spot.species.kind == Kind.HUMAN) listOf(0, 1, 2, 2, 1, 0, 0, 0)[beat] else listOf(0, 2, 4, 5, 4, 2, 0, 0)[beat]
-        // everyone keeps the pose and direction they have in the reference picture
+        // people wave and cheer in turn; the dogs and cats run in place, all facing the middle
+        val k = spot.species.kind
+        val f = frame + spot.phase * 3
+        val pose = if (k == Kind.HUMAN) CharacterArt.Pose.clap(k, f / 2) else CharacterArt.Pose.run(k, f)
+        val target = when (k) { Kind.HUMAN -> 58f; Kind.DOG -> 42f; Kind.CAT -> 28f }
         character(
             spot.species, Stage.ADULT,
             centerX = spot.x.toFloat(), ground = (spot.ground - lift).toFloat(),
-            unitPx = p, unitsPerPixel = TITLE_CHAR_SCALE,
-            faceLeft = CharacterArt.facesLeft(spot.species),
+            unitPx = p, unitsPerPixel = target / CharacterArt.of(spot.species, Stage.ADULT).height,
+            faceLeft = spot.x > W / 2 + 10, pose = pose,
         )
     }
 }

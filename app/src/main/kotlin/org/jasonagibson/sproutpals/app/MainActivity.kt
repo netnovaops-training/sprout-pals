@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(applicationContext)
-        CharacterArt.init(resources)
+        CharacterArt.init(this)
         pedometer = Pedometer(applicationContext)
         // Shaking only matters on the pet screen (not the title), and only while it's an egg.
         shaker = ShakeDetector(applicationContext) { runOnUiThread { if (!showTitle) game?.onShake() } }

@@ -34,7 +34,7 @@ before the next birthday, long-press the title to skip an hour.
 
 ## Self-update
 
-The app checks `https://junsgarden.zapto.org/apps/sproutpals-version.json` on launch and offers
+The app checks `https://jasonagibson.zapto.org/game/version.json` on launch and offers
 to download the new APK. The manifest and APK are published by the release script (coming).
 
 ## Credits

@@ -54,6 +54,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     var petLift by mutableIntStateOf(0); private set
     var facingLeft by mutableStateOf(false); private set
     var move by mutableStateOf(Move.WANDER); private set
+    /** True on frames where the pet actually changed position (for walking poses). */
+    var moving by mutableStateOf(false); private set
     /** Out-walking state from the pedometer: drives walk mode and the excited egg. */
     var walk by mutableStateOf(Walk()); private set
 
@@ -92,7 +94,9 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (realNow > effectUntil) effect = Effect.NONE
         if (panel is Panel.Message && realNow > messageUntil) panel = Panel.None
 
+        val beforeX = petX
         animate(realNow)
+        moving = petX != beforeX
 
         val before = pet
         val after = PetEngine.advance(before, now(), zone, rng)

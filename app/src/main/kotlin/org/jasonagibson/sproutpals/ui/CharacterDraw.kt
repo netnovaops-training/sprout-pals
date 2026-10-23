@@ -2,7 +2,6 @@ package org.jasonagibson.sproutpals.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
@@ -19,13 +18,11 @@ data class CharBox(val left: Float, val top: Float, val width: Float, val height
     val centerX get() = left + width / 2
 }
 
-/** Old age: the adult picture, a little greyer. */
-private val OLD_AGE = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.45f) })
 
 /**
  * Draws a character picture standing on [ground], centred on [centerX] (both in screen units),
  * with [unitsPerPixel] screen units per picture pixel. Pixels stay crisp (no smoothing).
- * [faceLeft] turns animals around; people always face the viewer.
+ * [faceLeft] turns the character around; [pose] picks the picture (see [CharacterArt]).
  */
 fun DrawScope.character(
     species: Species,
@@ -35,8 +32,9 @@ fun DrawScope.character(
     unitPx: Float,
     unitsPerPixel: Float,
     faceLeft: Boolean = false,
+    pose: Int = 0,
 ): CharBox {
-    val img = CharacterArt.of(species, stage)
+    val img = CharacterArt.of(species, stage, pose)
     val w = img.width * unitsPerPixel
     val h = img.height * unitsPerPixel
     val left = centerX - w / 2
@@ -44,7 +42,7 @@ fun DrawScope.character(
     val dstOffset = IntOffset((left * unitPx).roundToInt(), (top * unitPx).roundToInt())
     val dstSize = IntSize((w * unitPx).roundToInt(), (h * unitPx).roundToInt())
     val flip = CharacterArt.flips(species) && faceLeft != CharacterArt.facesLeft(species)
-    val filter = if (stage == Stage.OLD) OLD_AGE else null
+    val filter: ColorFilter? = null   // old age has its own pictures now (grey hair, wrinkles)
     if (flip) {
         scale(-1f, 1f, pivot = Offset((left + w / 2) * unitPx, (top + h / 2) * unitPx)) {
             drawImage(img, dstOffset = dstOffset, dstSize = dstSize, filterQuality = FilterQuality.None, colorFilter = filter)

@@ -149,7 +149,8 @@ class Updater {
     }
 
     companion object {
-        private const val MANIFEST = "https://junsgarden.zapto.org/apps/sproutpals-version.json"
-        private const val DEFAULT_APK = "https://junsgarden.zapto.org/apps/sproutpals.apk"
+        // The game's home on Jason's server; set at build time (see app/build.gradle.kts, serverBase).
+        private val MANIFEST = "${BuildConfig.SERVER_BASE}/version.json"
+        private val DEFAULT_APK = "${BuildConfig.SERVER_BASE}/sproutpals.apk"
     }
 }

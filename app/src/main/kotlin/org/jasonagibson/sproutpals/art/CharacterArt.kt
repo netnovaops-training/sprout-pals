@@ -1,60 +1,63 @@
 package org.jasonagibson.sproutpals.art
 
-import android.content.res.Resources
+import android.content.Context
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.res.imageResource
-import org.jasonagibson.sproutpals.R
 import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.engine.Stage
 
 /**
- * The characters, as pictures cut from Jason's reference art (see art/make_sprites.py).
+ * The characters, as pictures cut from Jason's character sheet (see art/make_sheet_sprites.py).
  *
- * Every character has exactly one picture per life stage, made by shrinking the same cutout,
- * so a character can never turn into someone else between frames - the problem with the AI video.
- * Old age reuses the adult picture, drawn a little greyer (see [Stage.OLD] handling in the screen code).
+ * Files are res/drawable-nodpi/char_<name>_<stage>_<pose>.png: 4 life stages x 7 poses.
+ * Every character only ever uses its own files, so nobody can turn into someone else.
+ *
+ * Poses (all face right as drawn):
+ *   people: 0 stand, 1 wave, 2 big wave/cheer, 3 step, 4 landing squash, 5 jump stretch, 6 sick
+ *   dogs:   0 stand, 1 walk, 2 trot, 3 run,     4 landing squash, 5 jump stretch, 6 sick
+ *   cats:   0 sit,   1 walk, 2 leap, 3 meow,    4 landing squash, 5 jump stretch, 6 sick
  */
 object CharacterArt {
-    private val ids: Map<Pair<Species, String>, Int> = mapOf(
-        (Species.JUN to "baby") to R.drawable.char_jun_baby,
-        (Species.JUN to "kid") to R.drawable.char_jun_kid,
-        (Species.JUN to "adult") to R.drawable.char_jun_adult,
-        (Species.KONA to "baby") to R.drawable.char_kona_baby,
-        (Species.KONA to "kid") to R.drawable.char_kona_kid,
-        (Species.KONA to "adult") to R.drawable.char_kona_adult,
-        (Species.JASON to "baby") to R.drawable.char_jason_baby,
-        (Species.JASON to "kid") to R.drawable.char_jason_kid,
-        (Species.JASON to "adult") to R.drawable.char_jason_adult,
-        (Species.RUSTY to "baby") to R.drawable.char_rusty_baby,
-        (Species.RUSTY to "kid") to R.drawable.char_rusty_kid,
-        (Species.RUSTY to "adult") to R.drawable.char_rusty_adult,
-        (Species.KARA to "baby") to R.drawable.char_kara_baby,
-        (Species.KARA to "kid") to R.drawable.char_kara_kid,
-        (Species.KARA to "adult") to R.drawable.char_kara_adult,
-        (Species.DJ to "baby") to R.drawable.char_dj_baby,
-        (Species.DJ to "kid") to R.drawable.char_dj_kid,
-        (Species.DJ to "adult") to R.drawable.char_dj_adult,
-        (Species.MAUI to "baby") to R.drawable.char_maui_baby,
-        (Species.MAUI to "kid") to R.drawable.char_maui_kid,
-        (Species.MAUI to "adult") to R.drawable.char_maui_adult,
-    )
-    private val cache = HashMap<Int, ImageBitmap>()
-    private lateinit var res: Resources
+    const val POSES = 7
 
-    fun init(resources: Resources) { res = resources }
+    private val cache = HashMap<String, ImageBitmap>()
+    private lateinit var appContext: Context
 
-    fun of(species: Species, stage: Stage): ImageBitmap {
-        val key = when (stage) { Stage.BABY -> "baby"; Stage.KID -> "kid"; else -> "adult" }
-        val id = ids.getValue(species to key)
-        return cache.getOrPut(id) { ImageBitmap.imageResource(res, id) }
+    fun init(context: Context) { appContext = context.applicationContext }
+
+    private fun stageName(stage: Stage) = when (stage) {
+        Stage.BABY -> "baby"; Stage.KID -> "kid"; Stage.OLD -> "old"; else -> "adult"
     }
 
-    /**
-     * Which way the picture faces as drawn in the reference. People face the viewer (never flipped);
-     * Rusty runs right; Kara, Maui and DJ look left.
-     */
-    fun facesLeft(species: Species) = species in setOf(Species.KARA, Species.MAUI, Species.DJ)
+    fun of(species: Species, stage: Stage, pose: Int = 0): ImageBitmap {
+        val name = "char_${species.name.lowercase()}_${stageName(stage)}_${pose.coerceIn(0, POSES - 1)}"
+        return cache.getOrPut(name) {
+            val res = appContext.resources
+            // looked up by name: 168 files would be a very long table otherwise
+            @Suppress("DiscouragedApi")
+            val id = res.getIdentifier(name, "drawable", appContext.packageName)
+            ImageBitmap.imageResource(res, id)
+        }
+    }
 
-    fun flips(species: Species) = species.kind != Kind.HUMAN
+    /** All sprites face right; anyone can be turned around to walk left. */
+    fun facesLeft(@Suppress("UNUSED_PARAMETER") species: Species) = false
+
+    fun flips(@Suppress("UNUSED_PARAMETER") species: Species) = true
+
+    /** The pose to use for a kind of action, by kind of character. */
+    object Pose {
+        const val STAND = 0
+        const val LAND = 4
+        const val JUMP = 5
+        const val SICK = 6
+
+        /** Fully cared for: people clap (cheer and wave in turn), dogs bound, cats meow. */
+        fun clap(k: Kind, f: Int) = when (k) { Kind.HUMAN -> if ((f / 2) % 2 == 0) 2 else 1; Kind.CAT -> if ((f / 4) % 2 == 0) 3 else 0; Kind.DOG -> if ((f / 2) % 2 == 0) 3 else 2 }
+        fun wave(k: Kind, f: Int) = when (k) { Kind.HUMAN -> if ((f / 3) % 2 == 0) 1 else 2; Kind.CAT -> 3; Kind.DOG -> if ((f / 3) % 2 == 0) 0 else 1 }
+        fun walk(k: Kind, f: Int) = when (k) { Kind.HUMAN -> if ((f / 2) % 2 == 0) 3 else 0; Kind.CAT -> 1; Kind.DOG -> if ((f / 2) % 2 == 0) 1 else 2 }
+        fun run(k: Kind, f: Int) = when (k) { Kind.HUMAN -> if ((f / 2) % 2 == 0) 3 else 0; Kind.CAT -> if ((f / 2) % 2 == 0) 1 else 2; Kind.DOG -> if ((f / 2) % 2 == 0) 2 else 3 }
+        fun cheer(k: Kind) = when (k) { Kind.HUMAN -> 2; Kind.CAT -> 3; Kind.DOG -> 3 }
+    }
 }

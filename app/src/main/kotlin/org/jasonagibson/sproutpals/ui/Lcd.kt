@@ -15,6 +15,7 @@ import org.jasonagibson.sproutpals.art.Icons
 import org.jasonagibson.sproutpals.art.Sprites
 import org.jasonagibson.sproutpals.art.x2
 import org.jasonagibson.sproutpals.engine.PetEngine
+import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
 import java.time.Instant
 import java.time.ZoneId
@@ -37,6 +38,47 @@ private const val PET_X0 = 32
  * Cats and dogs are a bit lower to the ground than people, as in the reference picture.
  * Sizing by target height keeps a baby cat big enough to see.
  */
+/** Three wavy green stink lines rising from (x, y) and fading as they go. */
+private fun DrawScope.stink(x: Int, y: Int, f: Int, px: Float) {
+    val wave = listOf(0, 1, 1, 0, -1, -1)
+    for (line in 0 until 3) {
+        val lx = x + line * 5
+        val rise = (f + line * 4) % 12
+        for (seg in 0 until 6) {
+            val sy = y - rise - seg
+            if (sy < AREA_TOP) continue
+            val alpha = (0xCC - seg * 0x1C).coerceAtLeast(0x30).toLong()
+            block(lx + wave[(seg + f / 2 + line) % wave.size], sy, 1, 1, (alpha shl 24) or 0x7FBF3F, px)
+        }
+    }
+}
+
+private fun poseFor(game: Game, lift: Int): Int {
+    val pet = game.pet
+    val k = pet.species.kind
+    val f = game.frame
+    val P = CharacterArt.Pose
+    val fullOfCare = pet.hunger == Rules.MAX_HEARTS && pet.happy == Rules.MAX_HEARTS && pet.poops == 0 && !pet.sick
+    return when {
+        pet.sleeping -> P.STAND
+        pet.sick && game.effect != Effect.PILL -> P.SICK
+        game.effect == Effect.HAPPY -> if (lift >= 4) P.JUMP else P.cheer(k)
+        game.effect == Effect.NO -> if (k == Kind.CAT) 3 else P.STAND
+        game.effect != Effect.NONE -> P.STAND                     // eating, medicine, cleaning
+        game.walkMode -> P.walk(k, f)
+        game.move == Move.HOP -> if (lift >= 4) P.JUMP else if (lift == 0) P.LAND else P.walk(k, f)
+        game.move == Move.RUN && game.moving -> P.run(k, f)
+        game.moving -> P.walk(k, f)
+        game.move == Move.DANCE || game.move == Move.BALL -> P.wave(k, f)
+        game.move == Move.GARDEN -> if (k == Kind.HUMAN) (if ((f / 4) % 2 == 0) 1 else 0) else P.STAND
+        // all hearts full, nothing to clean: a happy clapping fit every few seconds
+        fullOfCare && (f / 16) % 3 == 0 -> P.clap(k, f)
+        // standing about: every few seconds a little wave (people) or a meow (cats)
+        (f / 8) % 6 == 5 -> P.wave(k, f)
+        else -> P.STAND
+    }
+}
+
 private fun petScale(species: Species, stage: Stage): Float {
     val target = when (stage) { Stage.BABY -> 26f; Stage.KID -> 36f; else -> 46f } *
         if (species.kind == Kind.HUMAN) 1f else 0.82f
@@ -195,6 +237,7 @@ fun DrawScope.drawLcd(game: Game) {
                 pet.species, pet.stage,
                 centerX = x + 16f + sway, ground = (GROUND + 1 - lift).toFloat(),
                 unitPx = px, unitsPerPixel = petScale(pet.species, pet.stage), faceLeft = game.facingLeft,
+                pose = poseFor(game, lift),
             )
         }
         val bx = box.left.toInt()
@@ -225,6 +268,8 @@ fun DrawScope.drawLcd(game: Game) {
             }
         }
         if (walking && f % 8 < 4) block(bx - 2, GROUND - 1, 4, 2, 0xAAE6D3B0, px)   // dust behind the feet
+        // smelly: wavy green stink lines drifting up off the pet
+        if (PetEngine.smelly(pet) && !pet.sleeping) stink(bx + bw / 2 - 6, by + 4, f, px)
 
         if (pet.species.rare && pet.stage != Stage.EGG && f % 8 < 4) grid(Sprites.STAR.x2(), Sprites.STAR_PALETTE, bx + bw, by - 2, px)
         if (pet.sick && !pet.sleeping) grid(Sprites.SKULL.x2(), Sprites.SKULL_PALETTE, bx - 12, by, px)
@@ -246,6 +291,7 @@ fun DrawScope.drawLcd(game: Game) {
     // poop piles along the right edge; the clean effect sweeps a wave across them
     if (!dark) {
         repeat(pet.poops) { i -> grid(Sprites.POOP.x2(), Sprites.POOP_PALETTE, 78 - (i % 2) * 16, GROUND - 9 - (i / 2) * 12, px) }
+        if (PetEngine.smelly(pet)) stink(78, GROUND - 12 - ((pet.poops - 1) / 2) * 12, f + 3, px)
         if (game.effect == Effect.CLEAN) {
             val wx = (f % 16) * 6
             block(wx, AREA_TOP + 4, 4, AREA_H - 8, 0xCCFFFFFF, px)

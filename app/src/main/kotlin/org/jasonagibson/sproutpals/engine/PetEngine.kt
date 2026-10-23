@@ -44,7 +44,13 @@ object Rules {
 
     fun hungerEvery(s: Stage) = when (s) { Stage.BABY -> 60; Stage.KID -> 120; Stage.ADULT -> 180; else -> 150 }
     fun happyEvery(s: Stage) = when (s) { Stage.BABY -> 75; Stage.KID -> 120; else -> 150 }
-    fun poopEvery(s: Stage) = when (s) { Stage.BABY -> 120; Stage.KID -> 180; else -> 240 }
+    /** Every 4 awake hours, at every age (Jason, 10-23)... */
+    @Suppress("UNUSED_PARAMETER")
+    fun poopEvery(s: Stage) = 240
+    /** ...plus a surprise one or two a day: about 1.5 extra per 15 awake hours. */
+    const val RANDOM_POOP_PER_MINUTE = 1.5 / (15 * 60)
+    /** Poop left out this long (awake minutes) starts to smell. */
+    const val SMELLY_AFTER = 30
 
     /** Party hat for the last day before each birthday (growing into kid, adult, old). */
     fun birthdaySoon(age: Long): Boolean =
@@ -143,6 +149,7 @@ object PetEngine {
         var poops = s.poops
         var poopTimer = s.poopTimer + 1
         if (poopTimer >= Rules.poopEvery(s.stage)) { poops = (poops + 1).coerceAtMost(Rules.MAX_POOPS); poopTimer = 0 }
+        else if (rng.nextDouble() < Rules.RANDOM_POOP_PER_MINUTE) poops = (poops + 1).coerceAtMost(Rules.MAX_POOPS)
 
         var sick = s.sick
         var poopAge = if (poops > 0) s.poopAge + 1 else 0
@@ -223,6 +230,9 @@ object PetEngine {
     }
 
     fun toggleLights(s: PetState): PetState = s.copy(lightsOn = !s.lightsOn)
+
+    /** Poop has been left out long enough to stink. */
+    fun smelly(s: PetState) = s.ended == null && s.poops > 0 && s.poopAge >= Rules.SMELLY_AFTER
 
     /** True when the attention icon should light up. */
     fun needsAttention(s: PetState): Boolean {

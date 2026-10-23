@@ -125,6 +125,30 @@ class PetEngineTest {
         assertEquals(310L, save.stepsTotal)
     }
 
+    @Test fun `poop comes every 4 awake hours plus a surprise or two a day`() {
+        // A well-fed pet, cleaned every 10 minutes for 10 days; count the poops that appear.
+        // Awake 07:00-22:00 = 15 h: 3 scheduled + about 1.5 surprise = about 4.5 a day.
+        val rng = Random(10)
+        var s = pet()
+        var t = start + Rules.HOUR
+        var total = 0
+        val days = 10
+        repeat(days * 24 * 6) {
+            t += 10 * Rules.MINUTE
+            s = PetEngine.advance(s, t, zone, rng)
+            total += s.poops
+            s = s.copy(poops = 0, poopAge = 0, hunger = 4, happy = 4, sick = false, sickMinutes = 0)
+        }
+        val perDay = total.toDouble() / days
+        assertTrue("got $perDay a day", perDay in 3.4..6.0)
+    }
+
+    @Test fun `uncleaned poop gets smelly after half an hour`() {
+        val s = pet().copy(poops = 1, poopAge = Rules.SMELLY_AFTER - 1)
+        assertFalse(PetEngine.smelly(s))
+        assertTrue(PetEngine.smelly(s.copy(poopAge = Rules.SMELLY_AFTER)))
+    }
+
     @Test fun `an egg waits for a shake and never ages on its own`() {
         val waited = PetEngine.advance(egg(), start + 3 * Rules.DAY, zone, Random(9))
         assertEquals(Stage.EGG, waited.stage)
