@@ -1,0 +1,20 @@
+[package]
+name = "sprout-server"
+version = "0.1.0"
+edition = "2021"
+description = "Sprout Pals friends server: garden codes, friends, hearts"
+
+[dependencies]
+# Same stack as the household's other Rust services (ai-stack/rust).
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio", "macros"] }
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
