@@ -26,8 +26,24 @@ android {
         buildConfigField("String", "SERVER_BASE", "\"$serverBase\"")
     }
 
+    // Release signing. The key file lives outside the repo (~/.android-keys); its password comes from
+    // Proton Pass through an environment variable (see release.ps1), never from a file.
+    val releaseKey = file("${System.getProperty("user.home")}/.android-keys/sproutpals-release.jks")
+    val releasePassword = System.getenv("SPROUT_KEYSTORE_PASSWORD")?.takeIf { !it.startsWith("pass://") }
+    signingConfigs {
+        if (releaseKey.exists() && releasePassword != null) {
+            create("release") {
+                storeFile = releaseKey
+                storePassword = releasePassword
+                keyAlias = "sproutpals"
+                keyPassword = releasePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             optimization {
                 enable = false
             }

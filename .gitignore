@@ -24,3 +24,7 @@ Thumbs.db
 # --- server ---
 server/target/
 server/*.db
+
+# --- release.ps1 output (published to the NUC, not kept in git) ---
+build-release/
+# signing.env holds only pass:// references - safe to commit. The key file lives in ~/.android-keys.
