@@ -11,7 +11,8 @@ name: ios
 
 on:
   push:
-    branches: [main]
+    # the Apple version lives on the "apple" branch of sprout-pals for now (main is the Android app)
+    branches: [main, apple]
     tags: ["ios-v*"]
     paths:
       - "shared/**"

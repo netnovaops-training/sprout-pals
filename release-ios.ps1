@@ -10,7 +10,7 @@
 param([Parameter(Mandatory = $true)][string]$Version)
 $ErrorActionPreference = 'Stop'
 
-$repo = 'netnovaops-training/sprout-pals-apple'
+$repo = 'netnovaops-training/sprout-pals'   # the Apple version is the "apple" branch there for now
 $tag = "ios-v$Version"
 $base = 'https://jasonagibson.zapto.org/game'
 $out = Join-Path $PSScriptRoot 'build-release'
