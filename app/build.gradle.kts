@@ -61,6 +61,9 @@ android {
 }
 
 dependencies {
+    // the game itself (rules, screens, drawing) - shared with the iPhone app
+    implementation(project(":shared"))
+    implementation(libs.kotlinx.datetime)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

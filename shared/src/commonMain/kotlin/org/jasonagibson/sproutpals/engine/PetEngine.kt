@@ -1,7 +1,7 @@
 package org.jasonagibson.sproutpals.engine
 
-import java.time.Instant
-import java.time.ZoneId
+import kotlinx.datetime.TimeZone
+import org.jasonagibson.sproutpals.app.hourAt
 import kotlin.random.Random
 
 /** Tuning numbers in one place. Times are minutes unless the name says otherwise. */
@@ -71,8 +71,8 @@ object Rules {
         else -> Stage.OLD
     }
 
-    fun isSleepTime(t: Long, zone: ZoneId): Boolean {
-        val h = Instant.ofEpochMilli(t).atZone(zone).hour
+    fun isSleepTime(t: Long, zone: TimeZone): Boolean {
+        val h = hourAt(t, zone)
         return h >= SLEEP_FROM_HOUR || h < WAKE_HOUR
     }
 }
@@ -97,7 +97,7 @@ object PetEngine {
         PetState(species = pickSpecies(rng, rarePercent), bornAt = now, lastTick = now)
 
     /** Plays minutes forward up to [to]. Caps catch-up at 20 days so a lost phone can't freeze the app. */
-    fun advance(state: PetState, to: Long, zone: ZoneId, rng: Random): PetState {
+    fun advance(state: PetState, to: Long, zone: TimeZone, rng: Random): PetState {
         if (state.ended != null) return state
         if (state.hatchedAt == null) return state  // eggs don't age; they wait for a shake
         var s = state
@@ -125,7 +125,7 @@ object PetEngine {
         )
     }
 
-    private fun minute(s0: PetState, t: Long, zone: ZoneId, rng: Random): PetState {
+    private fun minute(s0: PetState, t: Long, zone: TimeZone, rng: Random): PetState {
         var s = s0
         val hatched = s.hatchedAt ?: return s  // an egg just waits to be shaken
         val age = t - hatched

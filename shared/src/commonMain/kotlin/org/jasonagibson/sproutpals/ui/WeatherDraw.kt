@@ -2,6 +2,7 @@ package org.jasonagibson.sproutpals.ui
 
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import org.jasonagibson.sproutpals.engine.WeatherKind
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -45,7 +46,7 @@ fun DrawScope.drawWeather(kind: WeatherKind, f: Int, top: Int, h: Int, px: Float
             colors.forEachIndexed { band, c ->
                 val r = 40 - band
                 var a = 0.0
-                while (a <= Math.PI) {
+                while (a <= PI) {
                     val x = 48 + (r * cos(a)).toInt()
                     val y = top + 44 - (r * 0.75 * sin(a)).toInt()
                     if (y >= top) block(x, y, 1, 1, c, px)
@@ -57,7 +58,7 @@ fun DrawScope.drawWeather(kind: WeatherKind, f: Int, top: Int, h: Int, px: Float
             block(0, top, LCD_W, h, 0x22FFD84AL, px)
             // rays turning slowly around a sun in the corner
             for (i in 0 until 8) {
-                val a = i * Math.PI / 4 + f * 0.03
+                val a = i * PI / 4 + f * 0.03
                 for (d in 7..10) block(86 + (d * cos(a)).toInt(), top + 6 + (d * sin(a)).toInt(), 1, 1, 0xCCFFE27AL, px)
             }
             block(83, top + 3, 6, 6, 0xFFFFD84AL, px)

@@ -1,13 +1,18 @@
-# Versions copied from JunsGardenApp so both apps build with the same toolchain.
+# Versions copied from JunsGardenApp so both apps build with the same toolchain, plus the multiplatform
+# pieces for the Apple version (Compose Multiplatform, kotlinx-datetime, Ktor).
 [versions]
 agp = "9.3.1"
 kotlin = "2.2.10"
+composeMultiplatform = "1.9.3"
 composeBom = "2026.02.01"
 coreKtx = "1.10.1"
 activityCompose = "1.8.0"
 lifecycleRuntimeKtx = "2.6.1"
 datastore = "1.1.1"
 kotlinxSerializationJson = "1.7.3"
+kotlinxDatetime = "0.7.1"
+kotlinxCoroutines = "1.10.2"
+ktor = "3.2.3"
 work = "2.8.1"
 junit = "4.13.2"
 
@@ -24,9 +29,17 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

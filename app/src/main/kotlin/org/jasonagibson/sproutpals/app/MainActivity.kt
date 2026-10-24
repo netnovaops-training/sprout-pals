@@ -17,6 +17,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jasonagibson.sproutpals.BuildConfig
 import org.jasonagibson.sproutpals.art.CharacterArt
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
 import org.jasonagibson.sproutpals.engine.Stage
 import android.content.Intent
 import org.jasonagibson.sproutpals.ui.PalScreen
@@ -32,7 +34,7 @@ class MainActivity : ComponentActivity() {
     private var showTitle by mutableStateOf(true)
     private val updater = Updater()
     private val chip = Chiptune()
-    private val friendsApi = Friends()
+    private val friendsApi = Friends(BuildConfig.SERVER_BASE)
 
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         startPedometer()
@@ -63,7 +65,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(applicationContext)
-        CharacterArt.init(this)
+        // the shared drawing code asks for pictures by name; on Android they are res/drawable-nodpi files
+        val res = applicationContext.resources
+        CharacterArt.loader = { name ->
+            @Suppress("DiscouragedApi")
+            val id = res.getIdentifier(name, "drawable", packageName)
+            ImageBitmap.imageResource(res, id)
+        }
         pedometer = Pedometer(applicationContext)
         // Shaking only matters on the pet screen (not the title), and only while it's an egg.
         shaker = ShakeDetector(applicationContext) { runOnUiThread { if (!showTitle) game?.onShake() } }

@@ -23,4 +23,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "SproutPals"
+include(":shared")
 include(":app")

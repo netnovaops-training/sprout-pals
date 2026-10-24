@@ -28,7 +28,7 @@ import org.jasonagibson.sproutpals.engine.Weather
 import org.jasonagibson.sproutpals.engine.WeatherEvent
 import org.jasonagibson.sproutpals.engine.WeatherKind
 import org.jasonagibson.sproutpals.engine.Walking
-import java.time.ZoneId
+import kotlinx.datetime.TimeZone
 import kotlin.random.Random
 
 /** The 7 menu icons you can pick with A. Index 7 on screen is the attention light (not pickable). */
@@ -66,7 +66,7 @@ sealed interface Panel {
     /** End-of-game card: what happened and what you earned. */
     data class GameOver(val text: String) : Panel
     data object Ended : Panel
-    data class Update(val info: Updater.Available, val progress: Int? = null, val error: String? = null) : Panel
+    data class Update(val info: UpdateInfo, val progress: Int? = null, val error: String? = null) : Panel
 }
 
 /**
@@ -102,17 +102,17 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     var caption by mutableStateOf<String?>(null); private set
     private var captionUntil = 0L
     private var messageUntil = 0L
-    private val zone: ZoneId get() = ZoneId.systemDefault()
+    private val zone: TimeZone get() = localZone()
     private val rng = Random.Default
 
     val pet: PetState get() = save.pet
-    fun now() = System.currentTimeMillis() + save.timeOffset
+    fun now() = nowMillis() + save.timeOffset
 
     // ---------- clock ----------
 
     /** Walking with you: 2+ minutes of steps, until 2 minutes after the last one. */
-    val walkMode: Boolean get() = Walking.showWalk(walk, System.currentTimeMillis()) && pet.stage != Stage.EGG && !pet.sleeping && pet.ended == null
-    val walkingNow: Boolean get() = Walking.movingNow(walk, System.currentTimeMillis())
+    val walkMode: Boolean get() = Walking.showWalk(walk, nowMillis()) && pet.stage != Stage.EGG && !pet.sleeping && pet.ended == null
+    val walkingNow: Boolean get() = Walking.movingNow(walk, nowMillis())
 
     /** Party hat the day before growing up. */
     val birthdaySoon: Boolean get() {
@@ -251,15 +251,15 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         play(Effect.SHAKE)
         if (after.stage == Stage.BABY) {
             val name = after.species.title.uppercase()
-            onSound(Chiptune.Sfx.HATCH)
+            onSound(Sfx.HATCH)
             // the hatching scene: shell halves fly off, the baby pops up and cheers; caption underneath
             effect = Effect.HATCH
             effectFrame = frame
-            effectUntil = System.currentTimeMillis() + 3_500
+            effectUntil = nowMillis() + 3_500
             petX = 0
             caption = (if (after.species.rare) "✨ A RARE BABY $name! ✨" else "🐣 WELCOME, BABY $name!") +
                 if (after.generation > 1) "  (GENERATION ${after.generation})" else ""
-            captionUntil = System.currentTimeMillis() + 6_000
+            captionUntil = nowMillis() + 6_000
             count("hatch")
             if (after.species.rare) keyItem("✨", "A RARE $name HATCHED!")
         }
@@ -268,7 +268,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** New reading from the phone's pedometer. */
     fun onSteps(reading: Long) {
         // Only a rising count means "walking now"; the first reading after opening is just the total so far.
-        if (lastReading in 0 until reading) walk = Walking.onStep(walk, System.currentTimeMillis())
+        if (lastReading in 0 until reading) walk = Walking.onStep(walk, nowMillis())
         lastReading = reading
         val (next, arrived) = Route.collect(Steps.apply(save, reading))
         if (next != save) commit(next)
@@ -284,11 +284,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     // ---------- sound ----------
 
     /** Set by the activity; only called when sound is on. */
-    var onSoundOut: (Chiptune.Sfx) -> Unit = {}
+    var onSoundOut: (Sfx) -> Unit = {}
     /** Set by the activity: start (true) or stop (false) the background tune. */
     var onMusic: (Boolean) -> Unit = {}
 
-    fun onSound(sfx: Chiptune.Sfx) { if (save.soundOn) onSoundOut(sfx) }
+    fun onSound(sfx: Sfx) { if (save.soundOn) onSoundOut(sfx) }
 
     fun toggleSound() = commit(save.copy(soundOn = !save.soundOn))
 
@@ -303,19 +303,19 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** Long press on the SHOP button. */
     fun secretPoints(debug: Boolean) {
         if (mini != null || panel is Panel.Ended) return
-        val today = java.time.LocalDate.now(zone).toEpochDay()
+        val today = dateAt(nowMillis(), zone).toEpochDays().toLong()
         if (!debug && save.secretDay == today) {
             show("★ ;) ★\nCOME BACK\nTOMORROW", 2000)
             return
         }
         commit(save.copy(points = save.points + 50, secretDay = today))
-        onSound(Chiptune.Sfx.ARRIVE)
+        onSound(Sfx.ARRIVE)
         show("★ A SECRET! ★\n+50 ★", 2500)
     }
 
     /** Debug builds (long-press A): pretend you've been walking for 3 minutes. */
     fun debugWalk() {
-        val t = System.currentTimeMillis()
+        val t = nowMillis()
         walk = Walk(startedAt = t - 3 * Rules.MINUTE, lastStepAt = t)
     }
 
@@ -341,7 +341,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** Debug builds: long-press the title to jump an hour ahead. */
     fun timeWarp() = commit(save.copy(timeOffset = save.timeOffset + Rules.HOUR))
 
-    fun offerUpdate(info: Updater.Available) { if (panel == Panel.None) panel = Panel.Update(info) }
+    fun offerUpdate(info: UpdateInfo) { if (panel == Panel.None) panel = Panel.Update(info) }
     fun updateProgress(p: Int) { (panel as? Panel.Update)?.let { panel = it.copy(progress = p) } }
     fun updateFailed(msg: String) { (panel as? Panel.Update)?.let { panel = it.copy(error = msg, progress = null) } }
 
@@ -367,7 +367,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val earned = g.points()
         val happier = pet.happy < Rules.MAX_HEARTS
         commit(save.copy(pet = PetEngine.played(pet), points = save.points + earned))
-        onSound(if (earned > 0) Chiptune.Sfx.HATCH else Chiptune.Sfx.C)
+        onSound(if (earned > 0) Sfx.HATCH else Sfx.C)
         panel = Panel.GameOver(
             "${g.result}\n\n+$earned ★" + if (happier) "\n+1 ♥" else "",
         )
@@ -483,7 +483,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val wear = item.tab == ShopTab.OUTFITS
         val note = when (result) {
             ShopResult.BOUGHT -> {
-                onSound(Chiptune.Sfx.ARRIVE)
+                onSound(Sfx.ARRIVE)
                 if (!item.repeatable) { count("buy"); count("own:${item.id}") }
                 if (item.repeatable && next.mysteryCount >= Shop.MAX_REPEAT) count("secret_charm")
                 if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN YOUR GARDEN"
@@ -507,7 +507,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             val crop = Garden.seeds(save).getOrNull(p.seed) ?: return
             commit(Garden.plant(save, p.plot, crop.id, now))
             count("plant")
-            onSound(Chiptune.Sfx.C)
+            onSound(Sfx.C)
             panel = p.copy(picking = false, note = "PLANTED!\nNOW WATER IT")
             helpInGarden()
             return
@@ -518,7 +518,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             PlotState.DRY, PlotState.GROWING -> {
                 commit(Garden.water(save, p.plot, now))
                 if (Garden.wetMinutes(save, now) > 0) count("water")
-                onSound(Chiptune.Sfx.C)
+                onSound(Sfx.C)
                 helpInGarden()
                 val wet = Garden.wetMinutes(save, now)
                 if (wet == 0) p.copy(note = "❄ THE SOIL IS FROZEN!\nWAIT FOR THE THAW")
@@ -529,7 +529,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 val (next, crop) = Garden.harvest(save, p.plot, now) ?: return
                 val (withSeed, golden) = Garden.maybeGoldenSeed(next, rng.nextInt(100))
                 commit(withSeed)
-                onSound(Chiptune.Sfx.ARRIVE)
+                onSound(Sfx.ARRIVE)
                 helpInGarden()
                 count("harvest")
                 if (golden) keyItem("🌟", "A GOLDEN SEED!")
@@ -543,7 +543,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     private fun helpInGarden() {
         if (!canInteract() || walkMode) return
         move = Move.GARDEN
-        moveUntil = System.currentTimeMillis() + 8_000L
+        moveUntil = nowMillis() + 8_000L
     }
 
     private fun feedFromGarden() {
@@ -573,7 +573,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             pet.sleeping -> "ZZZ... ASLEEP"
             else -> "..."
         }
-    ).also { messageUntil = System.currentTimeMillis() + 1500 }
+    ).also { messageUntil = nowMillis() + 1500 }
 
     private fun care(action: (PetState) -> Pair<PetState, Outcome>, fx: Effect) {
         if (away) { panel = blocked(); return }
@@ -611,13 +611,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     private fun play(fx: Effect) {
         effect = fx
-        effectUntil = System.currentTimeMillis() + 2000
+        effectUntil = nowMillis() + 2000
         if (fx != Effect.NO) petX = 0
     }
 
     private fun show(text: String, ms: Long) {
         panel = Panel.Message(text)
-        messageUntil = System.currentTimeMillis() + ms
+        messageUntil = nowMillis() + ms
     }
 
     private fun newEgg() {
@@ -656,7 +656,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         toast = toastQueue.removeFirstOrNull()
         toast?.let {
             toastUntil = realNow + if (it.key) 4_000 else 3_000
-            onSound(if (it.key) Chiptune.Sfx.KEY_ITEM else Chiptune.Sfx.ACHIEVE)
+            onSound(if (it.key) Sfx.KEY_ITEM else Sfx.ACHIEVE)
         }
     }
 
@@ -664,7 +664,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     /** During the spring egg hunt, gardening turns up the hidden egg - once a year. */
     private fun findSpringEgg() {
-        val today = java.time.Instant.ofEpochMilli(now()).atZone(zone).toLocalDate()
+        val today = dateAt(now(), zone)
         if (org.jasonagibson.sproutpals.engine.Calendar.holiday(today) != org.jasonagibson.sproutpals.engine.Holiday.EGG_HUNT) return
         if (save.eggYear == today.year) return
         commit(save.copy(eggYear = today.year, points = save.points + org.jasonagibson.sproutpals.engine.Calendar.EGG_STARS))
@@ -705,7 +705,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     var onVisitOut: (code: String, hours: Int) -> Unit = { _, _ -> }
     var onHeartOut: (code: String, message: String) -> Unit = { _, _ -> }
 
-    val away: Boolean get() = save.awayUntil > System.currentTimeMillis()
+    val away: Boolean get() = save.awayUntil > nowMillis()
 
     /** While our pal is away: the host's own pal, shown beside ours (we're at their garden). */
     var hostPal by mutableStateOf<org.jasonagibson.sproutpals.app.Friends.Visitor?>(null); private set
@@ -741,9 +741,9 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         commit(save.copy(awayHost = host, awayUntil = untilMs))
         friendList.firstOrNull { it.code == host }?.let { hostPal = org.jasonagibson.sproutpals.app.Friends.Visitor(it.code, it.species, it.stage, "", untilMs / 1000) }
         count("visit")
-        onSound(Chiptune.Sfx.ARRIVE)
+        onSound(Sfx.ARRIVE)
         panel = Panel.None
-        show("OFF TO $host'S\nGARDEN! BACK IN\n${((untilMs - System.currentTimeMillis()) / Rules.HOUR + 1)}H", 2500)
+        show("OFF TO $host'S\nGARDEN! BACK IN\n${((untilMs - nowMillis()) / Rules.HOUR + 1)}H", 2500)
     }
 
     fun visitFailed(message: String) { (panel as? Panel.Friends)?.let { panel = it.copy(note = message.uppercase()) } }
@@ -760,7 +760,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (fresh.isNotEmpty()) {
             s = s.copy(welcomed = (s.welcomed + keys).takeLast(30))
             if (pet.ended == null && pet.stage != Stage.EGG) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
-            onSound(Chiptune.Sfx.ARRIVE)
+            onSound(Sfx.ARRIVE)
             if (panel == Panel.None) show("${fresh.first().code}'S ${fresh.first().species} CAME\nTO VISIT! +1 ♥", 3000)
         }
         if (s != save) commit(s)
@@ -770,11 +770,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** Home again: a heart and some stars for the trip. */
     private fun checkHome() {
         val host = save.awayHost ?: return
-        if (System.currentTimeMillis() < save.awayUntil) return
+        if (nowMillis() < save.awayUntil) return
         var s = save.copy(awayHost = null, awayUntil = 0, points = save.points + VISIT_STARS)
         if (pet.ended == null) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
         commit(s)
-        onSound(Chiptune.Sfx.HATCH)
+        onSound(Sfx.HATCH)
         if (panel == Panel.None) show("HOME FROM\n$host'S GARDEN!\n+1 ♥  +$VISIT_STARS ★", 3000)
     }
 

@@ -1,8 +1,6 @@
 package org.jasonagibson.sproutpals.art
 
-import android.content.Context
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.imageResource
 import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.engine.Stage
@@ -22,9 +20,12 @@ object CharacterArt {
     const val POSES = 7
 
     private val cache = HashMap<String, ImageBitmap>()
-    private lateinit var appContext: Context
 
-    fun init(context: Context) { appContext = context.applicationContext }
+    /**
+     * Turns a picture name ("char_kona_adult_2") into the picture. Each phone sets this once at startup:
+     * Android reads res/drawable-nodpi, the iPhone reads the PNG files bundled with the app.
+     */
+    lateinit var loader: (String) -> ImageBitmap
 
     private fun stageName(stage: Stage) = when (stage) {
         Stage.BABY -> "baby"; Stage.KID -> "kid"; Stage.OLD -> "old"; else -> "adult"
@@ -32,13 +33,7 @@ object CharacterArt {
 
     fun of(species: Species, stage: Stage, pose: Int = 0): ImageBitmap {
         val name = "char_${species.name.lowercase()}_${stageName(stage)}_${pose.coerceIn(0, POSES - 1)}"
-        return cache.getOrPut(name) {
-            val res = appContext.resources
-            // looked up by name: 168 files would be a very long table otherwise
-            @Suppress("DiscouragedApi")
-            val id = res.getIdentifier(name, "drawable", appContext.packageName)
-            ImageBitmap.imageResource(res, id)
-        }
+        return cache.getOrPut(name) { loader(name) }
     }
 
     /** All sprites face right; anyone can be turned around to walk left. */

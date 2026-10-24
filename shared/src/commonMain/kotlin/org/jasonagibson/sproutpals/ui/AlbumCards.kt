@@ -40,9 +40,8 @@ import org.jasonagibson.sproutpals.art.CharacterArt
 import org.jasonagibson.sproutpals.engine.Achievements
 import org.jasonagibson.sproutpals.engine.EndReason
 import org.jasonagibson.sproutpals.engine.Rules
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import org.jasonagibson.sproutpals.app.dateAt
+import kotlinx.datetime.number
 
 /*
  * The trophy list, the memory book, and the banner that slides in when something is earned.
@@ -122,7 +121,10 @@ fun TrophyCard(game: Game, p: Panel.Trophies) {
     }
 }
 
-private val DAY = DateTimeFormatter.ofPattern("MMM d")
+private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+/** "Oct 23" for a moment in time, in the phone's time zone. */
+private fun day(ms: Long) = dateAt(ms).let { "${MONTHS[it.month.number - 1]} ${it.day}" }
 
 @Composable
 fun BookCard(game: Game, p: Panel.Book) {
@@ -136,7 +138,6 @@ fun BookCard(game: Game, p: Panel.Book) {
         }
         // newest first
         val m = book.reversed()[p.page.coerceIn(0, book.size - 1)]
-        val zone = ZoneId.systemDefault()
         val days = (m.endedAt - m.bornAt) / Rules.DAY
         Row(verticalAlignment = Alignment.CenterVertically) {
             Canvas(Modifier.size(84.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFBFE3A8)).border(2.dp, INK, RoundedCornerShape(5.dp))) {
@@ -146,7 +147,7 @@ fun BookCard(game: Game, p: Panel.Book) {
             Spacer(Modifier.width(10.dp))
             Column {
                 BasicText(m.species.title.uppercase() + if (m.species.rare) "  ✨ RARE" else "", style = mono.copy(fontSize = 16.sp))
-                BasicText("${Instant.ofEpochMilli(m.bornAt).atZone(zone).format(DAY)} - ${Instant.ofEpochMilli(m.endedAt).atZone(zone).format(DAY)}", style = mono.copy(fontSize = 11.sp))
+                BasicText("${day(m.bornAt)} - ${day(m.endedAt)}", style = mono.copy(fontSize = 11.sp))
                 BasicText("$days DAYS · REACHED ${m.stage.name}", style = mono.copy(fontSize = 11.sp))
                 if (m.generation > 1) BasicText("GENERATION ${m.generation}", style = mono.copy(fontSize = 11.sp, color = Color(0xFF8E4FC9)))
                 BasicText(if (m.mistakes == 0) "NO CARE MISTAKES!" else "${m.mistakes} CARE MISTAKES", style = mono.copy(fontSize = 10.sp, color = INK.copy(alpha = 0.7f)))

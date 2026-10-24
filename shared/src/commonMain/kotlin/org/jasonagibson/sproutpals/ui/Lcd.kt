@@ -23,8 +23,12 @@ import org.jasonagibson.sproutpals.art.x2
 import org.jasonagibson.sproutpals.engine.PetEngine
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
-import java.time.Instant
-import java.time.ZoneId
+import org.jasonagibson.sproutpals.app.dateAt
+import org.jasonagibson.sproutpals.app.hourAt
+import kotlin.math.PI
+
+/** Wrap-around for scrolling scenery (always 0..b-1, even for negative a). */
+private fun floorMod(a: Int, b: Int) = a.mod(b)
 
 /*
  * The screen: a 96 x 104 grid of square pixels (SNES-ish detail, still chunky).
@@ -141,7 +145,7 @@ private enum class Sky(val top: Long, val mid: Long, val low: Long, val hill: Lo
     NIGHT(0xFF10193A, 0xFF1A2A52, 0xFF24345C, 0xFF24482E, 0xFF2C5236, 0xFF24462E),
 }
 
-private fun skyAt(now: Long): Sky = when (Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).hour) {
+private fun skyAt(now: Long): Sky = when (hourAt(now)) {
     in 5..7 -> Sky.DAWN
     in 8..16 -> Sky.DAY
     in 17..19 -> Sky.SUNSET
@@ -181,12 +185,12 @@ fun DrawScope.drawLcd(game: Game) {
         // clouds drift on their own, faster when walking
         val drift = f / 12 + farScroll
         for ((cx, cy, cw) in listOf(Triple(10, 6, 18), Triple(52, 12, 14), Triple(86, 3, 12))) {
-            val x = Math.floorMod(cx - drift, LCD_W + cw) - cw
+            val x = floorMod(cx - drift, LCD_W + cw) - cw
             block(x, AREA_TOP + cy, cw, 3, 0xFFFAFCFF, px); block(x + 3, AREA_TOP + cy - 2, cw - 6, 2, 0xFFFAFCFF, px)
         }
         // rolling hills
         for (i in 0 until 5) {
-            val hx = Math.floorMod(i * 28 - farScroll, LCD_W + 28) - 14
+            val hx = floorMod(i * 28 - farScroll, LCD_W + 28) - 14
             block(hx, AREA_TOP + 34, 28, 8, sky.hill, px); block(hx + 6, AREA_TOP + 31, 16, 3, sky.hill, px)
         }
         // lawn with mowing stripes, then the dirt edge
@@ -195,10 +199,10 @@ fun DrawScope.drawLcd(game: Game) {
         block(0, GROUND + 4, LCD_W, 4, 0xFF7A4A24, px)
         // fence posts and bushes behind the lawn
         for (i in 0 until 5) {
-            val fx = Math.floorMod(i * 22 + 4 - nearScroll / 3, LCD_W + 8) - 4
+            val fx = floorMod(i * 22 + 4 - nearScroll / 3, LCD_W + 8) - 4
             block(fx, AREA_TOP + 38, 3, 10, 0xFFA8743F, px); block(fx - 4, AREA_TOP + 41, 11, 2, 0xFF8A5A2B, px)
         }
-        val today = Instant.ofEpochMilli(game.now()).atZone(ZoneId.systemDefault()).toLocalDate()
+        val today = dateAt(game.now())
         val season = Calendar.season(today)
         // bushes take the season's colours: blossom, green, autumn red-orange, snow-capped
         val (bushDark, bushLight) = when (season) {
@@ -208,7 +212,7 @@ fun DrawScope.drawLcd(game: Game) {
             Season.WINTER -> 0xFF2A5A3AL to 0xFFF4F8FFL
         }
         for (i in 0 until 3) {
-            val bx = Math.floorMod(i * 40 + 12 - nearScroll / 2, LCD_W + 16) - 8
+            val bx = floorMod(i * 40 + 12 - nearScroll / 2, LCD_W + 16) - 8
             block(bx, AREA_TOP + 40, 16, 6, bushDark, px); block(bx + 3, AREA_TOP + 37, 10, 3, bushLight, px)
             if (season == Season.SPRING) { block(bx + 2, AREA_TOP + 41, 2, 1, 0xFFF2A3C0, px); block(bx + 10, AREA_TOP + 42, 2, 1, 0xFFFFFFFF, px) }
         }
@@ -218,13 +222,13 @@ fun DrawScope.drawLcd(game: Game) {
         val flowerColors = listOf(0xFFE0344BL, 0xFFFFD84AL, 0xFF8E6FE0L, 0xFF3C7DD9L, 0xFFF2A3C0L)
         // six flowers always, plus the ones the bees have grown
         for (i in 0 until 6 + game.save.flowers) {
-            val fx = Math.floorMod(i * 17 + 3 + (i / 6) * 8 - nearScroll, LCD_W + 6) - 3
+            val fx = floorMod(i * 17 + 3 + (i / 6) * 8 - nearScroll, LCD_W + 6) - 3
             val fy = GROUND - 2 + (i % 3) * 2
             block(fx + 1, fy, 1, 3, 0xFF2F8A3A, px)
             block(fx + sway, fy - 2, 3, 2, flowerColors[i % flowerColors.size], px)
         }
         for (i in 0 until 8) {
-            val gx = Math.floorMod(i * 13 + 8 - nearScroll, LCD_W + 4) - 2
+            val gx = floorMod(i * 13 + 8 - nearScroll, LCD_W + 4) - 2
             block(gx, GROUND + 1, 1, 2, sky.grassDark, px); block(gx + 2, GROUND, 1, 3, sky.grassDark, px)
         }
     }
@@ -340,7 +344,7 @@ fun DrawScope.drawLcd(game: Game) {
                 shaded(egg.drop(half), Sprites.EGG_PALETTE, cx + t * 2, GROUND - half + 1 + fall / 3, px)
             }
             for (i in 0 until 6) {
-                val a = i * Math.PI / 3 + t * 0.15
+                val a = i * PI / 3 + t * 0.15
                 val r = 8 + (t % 12)
                 if ((t + i) % 3 != 0) block(box.centerX.toInt() + (r * kotlin.math.cos(a)).toInt(), box.headTop.toInt() + 6 + (r * kotlin.math.sin(a) * 0.6).toInt(), 1, 1, 0xFFFFF6A0, px)
             }
@@ -364,7 +368,7 @@ fun DrawScope.drawLcd(game: Game) {
             val colors = listOf(0xFFE0344BL, 0xFFFFD84AL, 0xFF3C7DD9L, 0xFF5BC236L, 0xFFF2A3C0L)
             for (i in 0 until 8) {
                 val cx = (i * 23 + 5) % LCD_W
-                val cy = AREA_TOP + Math.floorMod(f + i * 9, 50)
+                val cy = AREA_TOP + floorMod(f + i * 9, 50)
                 block(cx, cy, 2, 2, colors[i % colors.size], px)
             }
         }

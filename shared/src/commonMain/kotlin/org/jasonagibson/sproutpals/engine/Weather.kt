@@ -1,8 +1,12 @@
 package org.jasonagibson.sproutpals.engine
 
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toInstant
 import kotlinx.serialization.Serializable
-import java.time.Instant
-import java.time.ZoneId
+import org.jasonagibson.sproutpals.app.dateAt
 import kotlin.random.Random
 
 /**
@@ -33,16 +37,17 @@ object Weather {
     fun now(save: Save, at: Long): WeatherKind? = save.weather?.takeIf { at >= it.start && at < it.end }?.kind
 
     /** Once per day: maybe plan today's event. */
-    fun plan(save: Save, at: Long, zone: ZoneId, rng: Random): Save {
-        val day = Instant.ofEpochMilli(at).atZone(zone).toLocalDate()
-        if (save.weatherDay == day.toEpochDay()) return save
-        val s = save.copy(weatherDay = day.toEpochDay())
+    fun plan(save: Save, at: Long, zone: TimeZone, rng: Random): Save {
+        val day = dateAt(at, zone)
+        val dayNumber = day.toEpochDays().toLong()
+        if (save.weatherDay == dayNumber) return save
+        val s = save.copy(weatherDay = dayNumber)
         if (rng.nextInt(100) >= DAILY_CHANCE) return s
-        val winter = day.monthValue >= 11 || day.monthValue <= 3
+        val winter = day.month.number >= 11 || day.month.number <= 3
         val pool = WeatherKind.entries.filter { it != WeatherKind.SNOW }
         val rolled = pool[rng.nextInt(pool.size)]
         val kind = if (winter && rolled == WeatherKind.RAIN) WeatherKind.SNOW else rolled
-        val start = day.atTime(8 + rng.nextInt(8), 0).atZone(zone).toInstant().toEpochMilli()
+        val start = LocalDateTime(day, LocalTime(8 + rng.nextInt(8), 0)).toInstant(zone).toEpochMilliseconds()
         return s.copy(weather = WeatherEvent(kind, start, start + HOURS * HOUR))
     }
 

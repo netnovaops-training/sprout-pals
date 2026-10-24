@@ -1,7 +1,7 @@
 package org.jasonagibson.sproutpals.engine
 
-import java.time.Instant
-import java.time.ZoneId
+import kotlinx.datetime.TimeZone
+import org.jasonagibson.sproutpals.app.hourAt
 import kotlin.random.Random
 
 /**
@@ -53,7 +53,7 @@ object Visitors {
     fun present(save: Save, id: String, now: Long) = Shop.showing(save, id) || (save.guestCreature == id && now < save.guestUntil)
 
     /** Rolls every whole hour since the last time; returns the new save and what happened. */
-    fun catchUp(save: Save, now: Long, zone: ZoneId, rng: Random): Pair<Save, List<String>> {
+    fun catchUp(save: Save, now: Long, zone: TimeZone, rng: Random): Pair<Save, List<String>> {
         if (save.visitorsAt == 0L) return save.copy(visitorsAt = now) to emptyList()
         val hours = ((now - save.visitorsAt) / HOUR).toInt()
         if (hours <= 0) return save to emptyList()
@@ -62,7 +62,7 @@ object Visitors {
         val first = maxOf(0, hours - MAX_HOURS)
         for (h in first until hours) {
             val at = save.visitorsAt + (h + 1) * HOUR
-            val hourOfDay = Instant.ofEpochMilli(at).atZone(zone).hour
+            val hourOfDay = hourAt(at, zone)
             val night = hourOfDay >= 22 || hourOfDay < 7
             s = Weather.plan(s, at, zone, rng)
             val (w, weatherNews) = Weather.begin(s, at, rng)

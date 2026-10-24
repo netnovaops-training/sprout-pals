@@ -1,8 +1,9 @@
 package org.jasonagibson.sproutpals.ui
 
-import android.graphics.Bitmap
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -148,7 +149,7 @@ private fun recolor(img: ImageBitmap, band: ClosedFloatingPointRange<Float>, clo
         val c = src[y * w + x]
         if (usable(c)) buckets.getOrPut((r(c) / 48 shl 8) or (g(c) / 48 shl 4) or (b(c) / 48)) { mutableListOf() }.add(c)
     }
-    val main = buckets.values.maxByOrNull { it.size } ?: return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).asImageBitmap()
+    val main = buckets.values.maxByOrNull { it.size } ?: return ImageBitmap(w, h)
     val mr = main.map(::r).average().toInt(); val mg = main.map(::g).average().toInt(); val mb = main.map(::b).average().toInt()
     val mainColor = (0xFF shl 24) or (mr shl 16) or (mg shl 8) or mb
     val mainLum = lum(mainColor).coerceAtLeast(0.2f)
@@ -166,5 +167,19 @@ private fun recolor(img: ImageBitmap, band: ClosedFloatingPointRange<Float>, clo
         fun ch(v: Int) = (v * shade).toInt().coerceIn(0, 255)
         out[y * w + x] = (0xFF shl 24) or (ch(r(base)) shl 16) or (ch(g(base)) shl 8) or ch(b(base))
     }
-    return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888).asImageBitmap()
+    return pictureOf(out, w, h)
+}
+
+/** A picture from ARGB pixels, drawn one pixel at a time (sprites are small, and each is made once). */
+private fun pictureOf(pixels: IntArray, w: Int, h: Int): ImageBitmap {
+    val img = ImageBitmap(w, h)
+    val canvas = Canvas(img)
+    val paint = Paint()
+    for (y in 0 until h) for (x in 0 until w) {
+        val c = pixels[y * w + x]
+        if ((c ushr 24) == 0) continue
+        paint.color = Color(c)
+        canvas.drawRect(x.toFloat(), y.toFloat(), x + 1f, y + 1f, paint)
+    }
+    return img
 }

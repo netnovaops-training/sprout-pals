@@ -38,7 +38,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.jasonagibson.sproutpals.app.Chiptune
+import org.jasonagibson.sproutpals.app.Sfx
+import org.jasonagibson.sproutpals.app.nowMillis
+import org.jasonagibson.sproutpals.app.oneDecimal
+import org.jasonagibson.sproutpals.app.noDecimals
 import org.jasonagibson.sproutpals.app.Game
 import org.jasonagibson.sproutpals.app.Panel
 import org.jasonagibson.sproutpals.engine.Achievements
@@ -113,7 +116,7 @@ fun PalScreen(
             PixelIcon(PixelArt.bowl(food), PixelArt.PAL_BLUE_BOWL, 34.dp)
             Spacer(Modifier.weight(1f))
             PixelIcon(PixelArt.bowl(4), PixelArt.PAL_PINK_BOWL, 34.dp, Modifier.clickable {
-                game.onSound(Chiptune.Sfx.SHOP); game.pressShop()
+                game.onSound(Sfx.SHOP); game.pressShop()
             })
             Spacer(Modifier.size(10.dp))
             PixelIcon(PixelArt.NOTE, if (game.save.musicOn) PixelArt.PAL_NOTE_ON else PixelArt.PAL_OFF, 30.dp, Modifier.clickable { game.toggleMusic() })
@@ -163,18 +166,18 @@ fun PalScreen(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             PixelIcon(PixelArt.SPEAKER, if (game.save.soundOn) PixelArt.PAL_SPEAKER_ON else PixelArt.PAL_OFF, 30.dp, Modifier.clickable { game.toggleSound() })
             Spacer(Modifier.weight(1f))
-            PillButton("A", BTN_A, onLong = { if (debug) game.debugWalk() }) { game.onSound(Chiptune.Sfx.A); game.pressA() }
+            PillButton("A", BTN_A, onLong = { if (debug) game.debugWalk() }) { game.onSound(Sfx.A); game.pressA() }
             Spacer(Modifier.size(10.dp))
             PillButton("B", BTN_B, onLong = { if (debug) game.debugWeather() }) {
-                game.onSound(Chiptune.Sfx.B)
+                game.onSound(Sfx.B)
                 // Debug builds: B stands in for a shake, since an emulator can't be shaken.
                 if (debug && game.pet.stage == Stage.EGG && game.panel == Panel.None) game.onShake()
                 else if (game.pressB()) onUpdate()
             }
             Spacer(Modifier.size(10.dp))
-            PillButton("C", BTN_C, onLong = { if (debug) game.debugBirthday() }) { game.onSound(Chiptune.Sfx.C); game.pressC() }
+            PillButton("C", BTN_C, onLong = { if (debug) game.debugBirthday() }) { game.onSound(Sfx.C); game.pressC() }
             Spacer(Modifier.weight(1f))
-            PillButton("SHOP", BTN_SHOP, small = true, onLong = { game.secretPoints(debug) }) { game.onSound(Chiptune.Sfx.SHOP); game.pressShop() }
+            PillButton("SHOP", BTN_SHOP, small = true, onLong = { game.secretPoints(debug) }) { game.onSound(Sfx.SHOP); game.pressShop() }
         }
         BasicText(
             "A next   B choose   C back",
@@ -397,8 +400,8 @@ private fun statusPage(game: Game, page: Int): String {
         3 -> {
             val steps = game.save.stepsTotal
             val next = Route.next(steps)
-            if (next == null) "WALKED ${"%.0f".format(Route.miles(steps))} MI\n\nEVERY SHOP\nVISITED!"
-            else "NEXT STOP\n${next.name.uppercase()}\n${next.town.uppercase()}\n\n${"%.1f".format(Route.milesToNext(steps))} MI TO GO"
+            if (next == null) "WALKED ${noDecimals(Route.miles(steps))} MI\n\nEVERY SHOP\nVISITED!"
+            else "NEXT STOP\n${next.name.uppercase()}\n${next.town.uppercase()}\n\n${oneDecimal(Route.milesToNext(steps) ?: 0.0)} MI TO GO"
         }
         4 -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\n" + weatherLine(game) + "\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
         Game.PAGE_TROPHIES -> {
@@ -436,7 +439,7 @@ private fun GoingPlacesBanner(game: Game) {
     val steps = game.save.stepsTotal
     val next = Route.next(steps)
     val text = if (next == null) "WALKING → EVERYWHERE VISITED!"
-    else "→ ${next.name.uppercase()}  ${"%.1f".format(Route.milesToNext(steps))} MI"
+    else "→ ${next.name.uppercase()}  ${oneDecimal(Route.milesToNext(steps) ?: 0.0)} MI"
     Box(Modifier.fillMaxSize().padding(top = 44.dp, start = 10.dp), contentAlignment = Alignment.TopStart) {
         Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFA8743F)).border(2.dp, Color(0xFF5C3A1A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
             BasicText(text, style = lcdText.copy(color = Color(0xFFFFF3D6), fontSize = 11.sp, lineHeight = 13.sp))
@@ -457,7 +460,7 @@ private fun CaptionStrip(text: String) {
 /** While our pal is out: a little sign saying where, and for how long. */
 @Composable
 private fun AwayBanner(game: Game) {
-    val left = ((game.save.awayUntil - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
+    val left = ((game.save.awayUntil - nowMillis()) / 60_000).coerceAtLeast(0)
     val text = "🧳 AT ${game.save.awayHost}'S GARDEN  ·  HOME IN ${if (left >= 60) "${left / 60}H ${left % 60}M" else "${left}M"}"
     Box(Modifier.fillMaxSize().padding(top = 44.dp), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFA8743F)).border(2.dp, Color(0xFF5C3A1A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {

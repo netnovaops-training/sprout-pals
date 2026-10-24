@@ -1,20 +1,29 @@
 package org.jasonagibson.sproutpals.app
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.header
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
+import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
-import org.jasonagibson.sproutpals.BuildConfig
-import java.net.HttpURLConnection
-import java.net.URL
+
+/** Where the game lives online (friends API, Android self-update); a test build can pass another. */
+const val DEFAULT_SERVER_BASE = "https://jasonagibson.zapto.org/game"
 
 /**
- * Talks to the friends server (server/ in this repo), at SERVER_BASE/api.
+ * Talks to the friends server (server/ in this repo), at [serverBase]/api. Same code on both phones
+ * (Ktor: OkHttp underneath on Android, Apple's URLSession on iPhone).
  * Every call returns a [Reply]: the value, or a short sentence to show the person.
  * Nothing here throws - no network is a normal state for a phone.
  */
-class Friends {
+class Friends(serverBase: String = DEFAULT_SERVER_BASE) {
     @Serializable data class Registered(val code: String, val token: String)
     @Serializable data class Friend(val code: String, val species: String, val stage: String, val lastSeen: Long = 0)
     @Serializable data class Heart(val from: String, val message: String, val at: Long)
@@ -31,7 +40,11 @@ class Friends {
     }
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val base = "${BuildConfig.SERVER_BASE}/api"
+    private val base = "$serverBase/api"
+    private val http = HttpClient {
+        install(HttpTimeout) { connectTimeoutMillis = 8_000; requestTimeoutMillis = 10_000 }
+        expectSuccess = false
+    }
 
     suspend fun register(): Reply<Registered> = call("POST", "/register", null, null) { json.decodeFromString(it) }
 
@@ -58,31 +71,23 @@ class Friends {
     suspend fun garden(token: String): Reply<GardenNow> = call("GET", "/garden", token, null) { json.decodeFromString(it) }
 
     private suspend fun <T> call(method: String, path: String, token: String?, body: String?, parse: (String) -> T): Reply<T> =
-        withContext(Dispatchers.IO) {
-            try {
-                val conn = (URL(base + path).openConnection() as HttpURLConnection).apply {
-                    requestMethod = method
-                    connectTimeout = 8_000
-                    readTimeout = 10_000
-                    setRequestProperty("Accept", "application/json")
-                    if (token != null) setRequestProperty("Authorization", "Bearer $token")
-                    if (body != null) {
-                        doOutput = true
-                        setRequestProperty("Content-Type", "application/json")
-                        outputStream.use { it.write(body.toByteArray()) }
-                    }
+        try {
+            val res = http.request(base + path) {
+                this.method = HttpMethod.parse(method)
+                header("Accept", "application/json")
+                if (token != null) header("Authorization", "Bearer $token")
+                if (body != null) {
+                    contentType(ContentType.Application.Json)
+                    setBody(body)
                 }
-                try {
-                    val code = conn.responseCode
-                    val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-                    if (code in 200..299) Reply.Ok(parse(text))
-                    else Reply.Fail(runCatching { json.decodeFromString<Err>(text).error }.getOrNull()?.takeIf { it.isNotBlank() } ?: "The garden server said no ($code).")
-                } finally {
-                    conn.disconnect()
-                }
-            } catch (_: Exception) {
-                Reply.Fail("Can't reach the garden server right now.")
             }
+            val text = res.bodyAsText()
+            if (res.status.isSuccess()) Reply.Ok(parse(text))
+            else Reply.Fail(runCatching { json.decodeFromString<Err>(text).error }.getOrNull()?.takeIf { it.isNotBlank() } ?: "The garden server said no (${res.status.value}).")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Reply.Fail("Can't reach the garden server right now.")
         }
 }
 

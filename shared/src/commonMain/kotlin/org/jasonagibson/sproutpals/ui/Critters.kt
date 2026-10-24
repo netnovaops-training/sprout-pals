@@ -79,7 +79,7 @@ private fun DrawScope.sprite(g: Grid, pal: Map<Char, Long>, x: Int, y: Int, u: F
     shaded(g, pal, x, y, u, flip)
 
 /** Out in the garden: switched on in the shop, or a guest a cat brought home. */
-private fun here(save: Save, id: String) = org.jasonagibson.sproutpals.engine.Visitors.present(save, id, System.currentTimeMillis())
+private fun here(save: Save, id: String) = org.jasonagibson.sproutpals.engine.Visitors.present(save, id, org.jasonagibson.sproutpals.app.nowMillis())
 
 /** A shop item's picture, centred in a 24x24-unit box and gently animated. */
 fun DrawScope.drawItemPreview(id: String, f: Int, u: Float) {

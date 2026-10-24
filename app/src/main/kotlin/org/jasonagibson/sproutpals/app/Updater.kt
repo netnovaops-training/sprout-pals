@@ -36,16 +36,8 @@ import java.security.MessageDigest
  */
 class Updater {
 
-    data class Available(
-        val versionCode: Int,
-        val versionName: String,
-        val url: String,
-        val md5: String,
-        val notes: String,
-    )
-
     /** Null when the site has nothing newer than what is running. */
-    suspend fun check(): Available? = withContext(Dispatchers.IO) {
+    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
         val conn = (URL(MANIFEST).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             setRequestProperty("Accept", "application/json")
@@ -61,7 +53,7 @@ class Updater {
             val code = json.optInt("versionCode", -1)
             if (code <= BuildConfig.VERSION_CODE) return@withContext null
 
-            Available(
+            UpdateInfo(
                 versionCode = code,
                 versionName = json.optString("versionName"),
                 url = json.optString("url").ifBlank { DEFAULT_APK },
@@ -88,7 +80,7 @@ class Updater {
      */
     suspend fun downloadAndInstall(
         context: Context,
-        update: Available,
+        update: UpdateInfo,
         onProgress: (Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }

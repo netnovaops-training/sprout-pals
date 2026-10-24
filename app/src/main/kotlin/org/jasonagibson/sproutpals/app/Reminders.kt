@@ -20,7 +20,6 @@ import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Steps
-import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
@@ -39,7 +38,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         save = withPrizes
         Milestones.announce(applicationContext, arrived)
         val now = System.currentTimeMillis() + save.timeOffset
-        val zone = ZoneId.systemDefault()
+        val zone = localZone()
         // the garden's hours (creatures, weather) and the pet's minutes, played forward
         val (visited, news) = Visitors.catchUp(save, now, zone, Random.Default)
         save = visited.copy(pet = PetEngine.advance(visited.pet, now, zone, Random.Default))
