@@ -24,18 +24,24 @@ OUT.mkdir(parents=True, exist_ok=True)
 PREVIEW = HERE / "build" / "preview"
 PREVIEW.mkdir(parents=True, exist_ok=True)
 
-sheet = cv2.cvtColor(cv2.imread(str(HERE / "source" / "character-sheet.jpg")), cv2.COLOR_BGR2RGB)
-H, W = sheet.shape[:2]
+def load(name):
+    return cv2.cvtColor(cv2.imread(str(HERE / "source" / name)), cv2.COLOR_BGR2RGB)
 
-# Rows of the sheet, top to bottom: (y range, characters left to right, 4 poses each).
+
+# Sheet 1 (the first character sheet): rows top to bottom, 4 poses per character in a row.
 ROWS = [
     ((120, 520), ["jason", "kona", "jun"]),      # straw hat / red hair / pink hoodie
     ((780, 1100), ["rusty", "kara"]),            # sable collie / tricolor collie
     ((1240, 1520), ["maui", "dj"]),              # cat (recolored brown) / tuxedo cat
 ]
+# Sheet 2 (Karta and Nathan): each character is a 2x2 block - top row stand, wave;
+# bottom row cheer, walk. Two row bands; each band holds both characters' two poses.
+GRID_SHEET = "sheet-karta-nathan.jpg"
+GRID_BANDS = [(50, 300), (305, 570)]
+GRID_NAMES = ["karta", "nathan"]
 
 # Pixel height of the ADULT sprite, per kind; baby and kid are made smaller from the same pose.
-ADULT_PX = {"jason": 64, "kona": 64, "jun": 64, "rusty": 50, "kara": 50, "maui": 34, "dj": 34}
+ADULT_PX = {"jason": 64, "kona": 64, "jun": 64, "karta": 64, "nathan": 64, "rusty": 50, "kara": 50, "maui": 34, "dj": 34}
 STAGES = {"baby": 0.62, "kid": 0.8, "adult": 1.0, "old": 0.97}
 COLORS = 16
 
@@ -153,7 +159,7 @@ def pixelate(rgba, height, ref_height):
     return outline(arr)
 
 
-PEOPLE = {"jason", "kona", "jun"}
+PEOPLE = {"jason", "kona", "jun", "karta", "nathan"}
 
 
 def resize_rgba(a, w, h):
@@ -190,6 +196,12 @@ def grow_old(rgba, name):
         top[: int(v.shape[0] * 0.50)] = True
         if name == "kona":
             hair = ((hh <= 10) | (hh >= 170)) & (s > 110) & (v > 60)             # red hair
+        elif name == "karta":
+            # reddish-brown hair, close in colour to the maroon shirt: look only at the top third
+            top[int(v.shape[0] * 0.36):] = False
+            hair = ((hh <= 22) | (hh >= 160)) & (s > 50) & (v > 30) & (v < 150)
+        elif name == "nathan":
+            hair = (hh >= 5) & (hh <= 25) & (s > 45) & (v > 60) & (v < 190)      # light brown hair and beard
         else:
             hair = (hh >= 3) & (hh <= 28) & (s > 50) & (v > 35) & (v < 115)      # dark brown hair, beard
         hair &= top & (rgba[..., 3] > 0)
@@ -198,7 +210,7 @@ def grow_old(rgba, name):
         n, labels, stats, _ = cv2.connectedComponentsWithStats(hair.astype(np.uint8), 8)
         if n > 1:
             order = 1 + np.argsort(-stats[1:, cv2.CC_STAT_AREA])
-            keep_n = 4 if name == "jason" else 1        # Jason: beard and sideburns under the hat
+            keep_n = 4 if name in ("jason", "nathan") else 1        # bearded: beard and sideburns too
             keep = [i for i in order[:keep_n] if stats[i, cv2.CC_STAT_AREA] > 0.03 * stats[order[0], cv2.CC_STAT_AREA]]
             hair = np.isin(labels, keep)
         grey = np.clip(v * 0.9 + 95, 0, 235)
@@ -277,14 +289,31 @@ def bottom_align(frames):
     return out
 
 
-rows_by_stage = {}
+# Collect each character's 4 drawn poses (stand, wave, cheer, walk/step) from whichever sheet has them.
+drawn = {}
+sheet = load("character-sheet.jpg")
 for (y0, y1), names in ROWS:
     figs, fg_band = figures_in(y0, y1)
     expected = 4 * len(names)
     if len(figs) != expected:
         sys.exit(f"row {y0}-{y1}: found {len(figs)} figures, expected {expected}: {[f[:4] for f in figs]}")
     for ci, name in enumerate(names):
-        poses = [cut(f, fg_band, y0) for f in figs[ci * 4:(ci + 1) * 4]]
+        drawn[name] = [cut(f, fg_band, y0) for f in figs[ci * 4:(ci + 1) * 4]]
+
+sheet = load(GRID_SHEET)
+for band, (y0, y1) in enumerate(GRID_BANDS):
+    figs, fg_band = figures_in(y0, y1)
+    if len(figs) != 2 * len(GRID_NAMES):
+        sys.exit(f"grid band {y0}-{y1}: found {len(figs)} figures: {[f[:4] for f in figs]}")
+    for ci, name in enumerate(GRID_NAMES):
+        drawn.setdefault(name, []).extend(cut(f, fg_band, y0) for f in figs[ci * 2:(ci + 1) * 2])
+
+only = set(sys.argv[2:])          # optional: just these characters (leaves the others' files alone)
+rows_by_stage = {}
+for name, poses in drawn.items():
+    if only and name not in only:
+        continue
+    if True:
         if name == "maui":
             poses = [orange_to_brown(p) for p in poses]
         if name == "kara":

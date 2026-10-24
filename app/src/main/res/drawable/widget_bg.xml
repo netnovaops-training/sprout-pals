@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget's card: the game's cream console colour with a dark border. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#F3E9C6" />
+    <stroke android:width="3dp" android:color="#1E2A1C" />
+    <corners android:radius="16dp" />
+</shape>

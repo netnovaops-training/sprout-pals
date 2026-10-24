@@ -42,6 +42,18 @@ object Palettes {
             'c' to 0xFFD8D8D0, 'P' to 0xFFFFFFFF, 'p' to 0xFFD8D8D0, 'L' to 0xFF3B3B4A, 'l' to 0xFF2A2A36,
             'F' to 0xFF7A4A24, 'f' to 0xFF5A3518,
         ),
+        // Karta: swept-up dark reddish-brown hair, maroon tee, tattoo sleeves, dark jeans
+        Species.KARTA to mapOf(
+            'B' to 0xFFE8B58E, 'b' to 0xFFC8936C, 'H' to 0xFF5A2A20, 'h' to 0xFF3E1C16, 'K' to 0xFF1B1B1B,
+            'W' to 0xFFFFFFFF, 'M' to 0xFF9A4A4A, 'C' to 0xFF6E1E2E, 'c' to 0xFF521624, 'P' to 0xFF7E2A3A,
+            'p' to 0xFF521624, 'L' to 0xFF2C3550, 'l' to 0xFF1E2438, 'F' to 0xFFEDEDED, 'f' to 0xFFBFBFBF,
+        ),
+        // Nathan: light-brown hair and beard, black tee with a pocket, dark trousers
+        Species.NATHAN to mapOf(
+            'B' to 0xFFE6A97E, 'b' to 0xFFC4875C, 'H' to 0xFF8A5E3A, 'h' to 0xFF6A4428, 'K' to 0xFF1B1B1B,
+            'W' to 0xFFFFFFFF, 'M' to 0xFF8A4A3A, 'C' to 0xFF1E1E22, 'c' to 0xFF101014, 'P' to 0xFF2A2A30,
+            'p' to 0xFF101014, 'L' to 0xFF2E2E3A, 'l' to 0xFF1E1E28, 'F' to 0xFF5A3518, 'f' to 0xFF3E2410,
+        ),
         // Jason (rare): straw hat, glasses, beard, blue hoodie, white sneakers
         Species.JASON to mapOf(
             'B' to 0xFFC68E63, 'b' to 0xFFA0704C, 'H' to 0xFF2B2018, 'h' to 0xFF1A130C, 'Y' to 0xFFD9B26A,

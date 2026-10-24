@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GardenTest {
-    private val pet = PetState(species = Species.JUN, bornAt = 0, lastTick = 0)
+    private val pet = PetState(species = Species.DJ, bornAt = 0, lastTick = 0)   // no ability: plain garden rules
     private val min = 60_000L
     private val t0 = 1_000_000_000L
 
@@ -46,6 +46,28 @@ class GardenTest {
         assertEquals(PlotState.EMPTY, Garden.state(Garden.plots(after)[2], t0 + 61 * min))
         val (eaten, _) = Garden.takeFood(after)!!
         assertTrue(eaten.pantry.isEmpty())
+    }
+
+    @Test fun `a berry bush stays planted after picking, half grown`() {
+        var s = Garden.plant(Save(pet = pet), 0, "berries", t0)
+        s = Garden.water(s, 0, t0)
+        val (after, _) = Garden.harvest(s, 0, t0 + 150 * min)!!
+        val p = Garden.plots(after)[0]
+        assertEquals("berries", p.crop)
+        assertEquals(75, Garden.minutesLeft(p, t0 + 150 * min))
+    }
+
+    @Test fun `golden seeds are rare, needed to plant gold, and used up`() {
+        val none = Save(pet = pet)
+        assertTrue(Garden.seeds(none).none { it.rare })
+        assertEquals(none, Garden.plant(none, 0, "golden", t0))
+        val (lucky, found) = Garden.maybeGoldenSeed(none, roll = 0)
+        assertTrue(found)
+        assertTrue(Garden.seeds(lucky).any { it.rare })
+        val planted = Garden.plant(lucky, 0, "golden", t0)
+        assertEquals(0, planted.goldenSeeds)
+        assertEquals("golden", Garden.plots(planted)[0].crop)
+        assertEquals(false, Garden.maybeGoldenSeed(none, roll = 50).second)
     }
 
     @Test fun `garden food fills and cheers without extra weight`() {

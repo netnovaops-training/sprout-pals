@@ -12,6 +12,10 @@ import org.jasonagibson.sproutpals.art.Grid
 import org.jasonagibson.sproutpals.app.Panel
 import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.Weather
+import org.jasonagibson.sproutpals.engine.Calendar
+import org.jasonagibson.sproutpals.engine.Season
+import org.jasonagibson.sproutpals.engine.Mood
+import org.jasonagibson.sproutpals.engine.Moods
 import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.art.Icons
 import org.jasonagibson.sproutpals.art.Sprites
@@ -193,10 +197,21 @@ fun DrawScope.drawLcd(game: Game) {
             val fx = Math.floorMod(i * 22 + 4 - nearScroll / 3, LCD_W + 8) - 4
             block(fx, AREA_TOP + 38, 3, 10, 0xFFA8743F, px); block(fx - 4, AREA_TOP + 41, 11, 2, 0xFF8A5A2B, px)
         }
+        val today = Instant.ofEpochMilli(game.now()).atZone(ZoneId.systemDefault()).toLocalDate()
+        val season = Calendar.season(today)
+        // bushes take the season's colours: blossom, green, autumn red-orange, snow-capped
+        val (bushDark, bushLight) = when (season) {
+            Season.SPRING -> 0xFF3FA04AL to 0xFFF2A3C0L
+            Season.SUMMER -> 0xFF2F8A3AL to 0xFF3FA04AL
+            Season.AUTUMN -> 0xFFC0641AL to 0xFFE8B923L
+            Season.WINTER -> 0xFF2A5A3AL to 0xFFF4F8FFL
+        }
         for (i in 0 until 3) {
             val bx = Math.floorMod(i * 40 + 12 - nearScroll / 2, LCD_W + 16) - 8
-            block(bx, AREA_TOP + 40, 16, 6, 0xFF2F8A3A, px); block(bx + 3, AREA_TOP + 37, 10, 3, 0xFF3FA04A, px)
+            block(bx, AREA_TOP + 40, 16, 6, bushDark, px); block(bx + 3, AREA_TOP + 37, 10, 3, bushLight, px)
+            if (season == Season.SPRING) { block(bx + 2, AREA_TOP + 41, 2, 1, 0xFFF2A3C0, px); block(bx + 10, AREA_TOP + 42, 2, 1, 0xFFFFFFFF, px) }
         }
+        if (!walking) drawSeasonAndHoliday(season, Calendar.holiday(today), f, sky == Sky.NIGHT || sky == Sky.SUNSET, game.save.eggYear == today.year, px)
         // flowers and grass tufts in front
         val sway = if (f % 16 < 8) 0 else 1
         val flowerColors = listOf(0xFFE0344BL, 0xFFFFD84AL, 0xFF8E6FE0L, 0xFF3C7DD9L, 0xFFF2A3C0L)
@@ -227,7 +242,12 @@ fun DrawScope.drawLcd(game: Game) {
 
     // ----- friends' pals visiting: they stroll along the back of the lawn, dressed in their outfits -----
     // (while our pal is out, we see it at the friend's garden: their pal plays beside ours)
-    val company = if (game.away) listOfNotNull(game.hostPal) else game.visitors
+    // Karta's friends / Nathan's drop-ins: pictures only (no hearts, no achievements)
+    val pals = if (pet.stage == Stage.EGG || pet.ended != null) emptyList() else
+        org.jasonagibson.sproutpals.engine.Abilities.company(pet.species, game.now() / Rules.HOUR).map {
+            org.jasonagibson.sproutpals.app.Friends.Visitor("", it.name, pet.stage.name, "", 0)
+        }
+    val company = if (game.away) listOfNotNull(game.hostPal) else (game.visitors + pals).take(3)
     if (playing == null && !dark && !walking) drawVisitors(company, f, GROUND, px)
 
     // ----- the pet (or the sprout it left behind) -----
@@ -300,6 +320,12 @@ fun DrawScope.drawLcd(game: Game) {
                 b.species, st, centerX = box.centerX + behind, ground = (GROUND + 1).toFloat(), unitPx = px,
                 unitsPerPixel = petScale(b.species, st) * 0.75f, faceLeft = game.facingLeft, pose = bpose,
             )
+        }
+
+        // a thought bubble now and then: 3 seconds showing, 5 hidden (not while sick: the bubble is taken)
+        val mood = Moods.of(pet, Weather.now(game.save, game.now()), game.visitors.isNotEmpty() || game.save.buddy != null || game.away)
+        if (mood != Mood.NONE && !pet.sick && (f / 8) % 8 < 3 && game.effect == Effect.NONE) {
+            drawMoodBubble(mood, box.headX.toInt() + 7, box.headTop.toInt() - 11, px)
         }
 
         // shop visitors that fly: in front of the pet, around its head

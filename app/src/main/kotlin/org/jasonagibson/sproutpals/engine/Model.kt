@@ -18,6 +18,8 @@ enum class Species(val kind: Kind, val title: String, val rare: Boolean = false)
     KARA(Kind.DOG, "Kara"),
     DJ(Kind.CAT, "DJ"),
     MAUI(Kind.CAT, "Maui"),
+    KARTA(Kind.HUMAN, "Karta"),
+    NATHAN(Kind.HUMAN, "Nathan"),
 
     /** The secret one: 1 egg in 100. */
     JASON(Kind.HUMAN, "Jason", rare = true),
@@ -71,8 +73,10 @@ data class PetState(
     val lightsOnAsleep: Int = 0,
     val ended: EndReason? = null,
     val endedAt: Long? = null,
-    /** Extra minutes of life, from the garden creatures. */
+    /** Extra minutes of life, from the garden creatures (and a family egg's heirloom day). */
     val bonusLife: Int = 0,
+    /** 1 for a fresh family; each full, happy life passes on a family egg one generation on. */
+    val generation: Int = 1,
 )
 
 /**
@@ -93,6 +97,7 @@ data class MemoryCard(
     val reason: EndReason,
     val stage: Stage,
     val mistakes: Int,
+    val generation: Int = 1,
 )
 
 /** Everything saved on the phone: the current pet plus what carries over between lives. */
@@ -121,6 +126,8 @@ data class Save(
     /** The garden bed (see [Garden]) and harvested crops waiting to be eaten (crop ids). */
     val plots: List<Plot> = emptyList(),
     val pantry: List<String> = emptyList(),
+    /** Golden seeds found while harvesting, waiting to be planted. */
+    val goldenSeeds: Int = 0,
     /** Flowers the bees have grown on the lawn. */
     val flowers: Int = 0,
     /** The last whole hour the garden creatures were played through (see [Visitors]). */
@@ -133,6 +140,8 @@ data class Save(
     val awayUntil: Long = 0,
     /** Visits already welcomed ("code@until"), so each arrival is celebrated once. */
     val welcomed: List<String> = emptyList(),
+    /** The year the spring egg was last found (one find a year). */
+    val eggYear: Int = 0,
     /** A second pal that tags along with the first (see [Buddy]). */
     val buddy: Buddy? = null,
     /** Achievements: how many times each thing was done, and the tiers earned ("key#tier"). */

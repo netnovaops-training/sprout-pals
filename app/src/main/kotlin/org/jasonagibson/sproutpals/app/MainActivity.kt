@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         gardenPoll?.cancel()
+        game?.save?.let { PalWidget.refresh(applicationContext, it) }
         pedometer.stop()
         shaker.stop()
         chip.stopMusic()   // music only while the app is on screen

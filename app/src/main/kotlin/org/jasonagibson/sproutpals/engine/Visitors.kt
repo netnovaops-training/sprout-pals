@@ -102,43 +102,46 @@ object Visitors {
         val berry = if (has("birdbath")) 12 else 6         // birdbath: berries twice as often
         val stings = !has("pond")                          // pond: no more stings
         val lateNights = !has("lantern")                   // lantern: fireflies can't keep the pal up
+        // the pal's own ability may stop the mischief (Jason, Jun, the dogs - see Abilities)
+        fun ok(): Boolean = Abilities.blocks(s.pet.species, fromCreature = true, rng)?.let { news += it; false } ?: true
+        fun bad(pct: Int) = chance(pct) && ok()
 
         // a little longer life for every creature out
         if (alive) pet { it.copy(bonusLife = it.bonusLife + out.sumOf { id -> if (id == "deer") DEER_LIFE else LIFE_MINUTES }) }
 
         for (id in out) when (id) {
-            "ladybug" -> if (s.pantry.isNotEmpty() && chance(2)) {
+            "ladybug" -> if (s.pantry.isNotEmpty() && bad(2)) {
                 s = s.copy(pantry = s.pantry.drop(1)); news += "A LADYBUG GOT INTO\nTHE PANTRY!"
             }
             "butterfly" -> {
                 if (alive && awake && chance(10)) { pet { it.copy(happy = (it.happy + 1).coerceAtMost(Rules.MAX_HEARTS)) } }
-                if (alive && awake && chance(3)) { pet { it.copy(hunger = (it.hunger - 1).coerceAtLeast(0)) }; news += "CHASED THE BUTTERFLY.\nSO HUNGRY NOW!" }
+                if (alive && awake && bad(3)) { pet { it.copy(hunger = (it.hunger - 1).coerceAtLeast(0)) }; news += "CHASED THE BUTTERFLY.\nSO HUNGRY NOW!" }
             }
             "bee" -> {
                 if (s.flowers < MAX_FLOWERS && chance(15)) s = s.copy(flowers = s.flowers + 1)
-                if (stings && alive && awake && !s.pet.sick && chance(2)) { pet { it.copy(sick = true) }; news += "OUCH! A BEE STING.\nTIME FOR MEDICINE" }
+                if (stings && alive && awake && !s.pet.sick && bad(2)) { pet { it.copy(sick = true) }; news += "OUCH! A BEE STING.\nTIME FOR MEDICINE" }
             }
             "fireflies" -> if (night && alive) {
                 if (chance(10)) pet { it.copy(happy = (it.happy + 1).coerceAtMost(Rules.MAX_HEARTS)) }
-                if (lateNights && chance(3)) { pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }; news += "THE FIREFLIES KEPT\nYOUR PAL UP LATE" }
+                if (lateNights && bad(3)) { pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }; news += "THE FIREFLIES KEPT\nYOUR PAL UP LATE" }
             }
             "bluebird" -> {
                 if (chance(berry)) { s = s.copy(pantry = s.pantry + "strawberry"); news += "THE BLUEBIRD BROUGHT\nA BERRY!" }
-                if (chance(4 / raid)) Garden.loseRipe(s, at)?.let { s = it.first; news += "THE BLUEBIRD PECKED\nYOUR ${it.second.name}!" }
+                if (bad(4 / raid)) Garden.loseRipe(s, at)?.let { s = it.first; news += "THE BLUEBIRD PECKED\nYOUR ${it.second.name}!" }
             }
             "bunny" -> {
                 if (alive && awake && chance(8)) pet { it.copy(happy = (it.happy + 1).coerceAtMost(Rules.MAX_HEARTS)) }
-                if (chance(4)) Garden.setBack(s, at, 30)?.let { s = it.first; news += "THE BUNNY NIBBLED\nYOUR ${it.second.name}" }
+                if (bad(4)) Garden.setBack(s, at, 30)?.let { s = it.first; news += "THE BUNNY NIBBLED\nYOUR ${it.second.name}" }
             }
             "squirrel" -> {
                 if (chance(8)) { s = s.copy(points = s.points + 2); news += "THE SQUIRREL BROUGHT\nNUTS! +2 ★" }
-                if (chance(4)) Garden.digUpSeed(s, at)?.let { s = it.first; news += "THE SQUIRREL DUG UP\nA ${it.second.name} SEED!" }
+                if (bad(4)) Garden.digUpSeed(s, at)?.let { s = it.first; news += "THE SQUIRREL DUG UP\nA ${it.second.name} SEED!" }
             }
             "hummingbird" -> {
                 if (alive && s.pet.sick && chance(15)) { pet { it.copy(sick = false, sickMinutes = 0, doses = 0) }; news += "THE HUMMINGBIRD\nMADE YOUR PAL BETTER!" }
-                if (alive && awake && chance(3)) pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }
+                if (alive && awake && bad(3)) pet { it.copy(happy = (it.happy - 1).coerceAtLeast(0)) }
             }
-            "deer" -> if (rng.nextInt(100 * raid) < 5) {
+            "deer" -> if (rng.nextInt(100 * raid) < 5 && ok()) {
                 (Garden.loseRipe(s, at) ?: Garden.setBack(s, at, 60))?.let { s = it.first; news += "THE DEER ATE SOME\nOF YOUR ${it.second.name}!" }
             }
         }

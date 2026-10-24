@@ -25,12 +25,16 @@ private val RIPE: Map<String, Grid> = mapOf(
     "strawberry" to listOf(".G.G.", "GRGRG", "RrGRr", "GGRGG", ".GgG."),
     "tomato" to listOf("..W..", "GRWRG", "RrWRr", ".GWG.", "..W.."),
     "pumpkin" to listOf("..g..", ".OGO.", "OOOOO", "OoOoO", ".ooo."),
+    "berries" to listOf(".GBG.", "GBGBG", "BGGGB", "GBGBG", ".GgG."),
+    "sunflower" to listOf(".YYY.", "YOOOY", "YOOOY", ".YYY.", "..G..", ".GG..", "..GG.", "..G..", "..g.."),
+    "golden" to listOf("..Y..", ".YyY.", "YyYyY", ".YyY.", "..G..", ".GgG.", "..g.."),
 )
 
 private val PAL = mapOf(
     's' to 0xFFE8D9A8L, 'G' to 0xFF5BC236L, 'g' to 0xFF3E8E2AL,
     'R' to 0xFFE0344BL, 'r' to 0xFFA82238L, 'O' to 0xFFF2912DL, 'o' to 0xFFC0641AL,
     'W' to 0xFF9A6A3AL,
+    'B' to 0xFF5A3FA8L, 'Y' to 0xFFFFD84AL, 'y' to 0xFFE8B923L,
 )
 
 /** Left edge of plot [i] (screen units). */

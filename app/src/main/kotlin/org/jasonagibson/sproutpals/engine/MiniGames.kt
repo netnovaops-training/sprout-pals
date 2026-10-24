@@ -25,12 +25,13 @@ sealed class MiniGame(val title: String) {
     open fun points(): Int = (score / 2).coerceIn(if (score > 0) 1 else 0, 10)
 
     companion object {
-        val NAMES = listOf("FRUIT CATCH", "JUMP ROPE", "TIC-TAC-TOE", "HIGHER/LOWER")
+        val NAMES = listOf("FRUIT CATCH", "JUMP ROPE", "TIC-TAC-TOE", "HIGHER/LOWER", "PLANT & HARVEST")
         fun start(index: Int, rng: Random): MiniGame = when (index) {
             0 -> FruitCatch(rng)
             1 -> JumpRope()
             2 -> TicTacToe(rng)
-            else -> HigherLower(rng)
+            3 -> HigherLower(rng)
+            else -> PlantHarvest(rng)
         }
     }
 }
@@ -176,6 +177,62 @@ class TicTacToe(private val rng: Random) : MiniGame("TIC-TAC-TOE") {
         fun winnerOf(b: CharArray): Char =
             LINES.firstOrNull { (x, y, z) -> b[x] != ' ' && b[x] == b[y] && b[y] == b[z] }?.let { b[it[0]] } ?: ' '
     }
+}
+
+/**
+ * Five plants grow along the bed, each at its own pace. A/C move along the row, B picks.
+ * Ripe (70-90) scores 1, perfect (78-86) scores 2; too early wastes it, past 100 it rots.
+ * A picked or rotten plant is re-sown. 30 seconds.
+ */
+class PlantHarvest(private val rng: Random) : MiniGame("PLANT & HARVEST") {
+    val plots = 5
+    /** 0..100+ per plot; 70-90 ripe, 78-86 perfect, over 100 rotten. */
+    val growth = IntArray(plots) { rng.nextInt(0, 40) }
+    private val speed = IntArray(plots) { rng.nextInt(1, 4) }
+    var cursor = 2
+        private set
+    var timeLeft = 30 * 8
+        private set
+    var perfects = 0
+        private set
+    var rotted = 0
+        private set
+    /** What the last pick was, for a moment on screen: "PERFECT!", "RIPE", "TOO EARLY", "ROTTEN". */
+    var callout = ""
+        private set
+    private var calloutFor = 0
+
+    override val result get() = "PICKED $score ★ WORTH" + if (perfects > 0) " ($perfects PERFECT)" else ""
+    override fun points() = (score / 2).coerceIn(if (score > 0) 1 else 0, 10)
+
+    override fun a() { if (!over) cursor = (cursor - 1).coerceAtLeast(0) }
+    override fun c() { if (!over) cursor = (cursor + 1).coerceAtMost(plots - 1) }
+
+    override fun b() {
+        if (over) return
+        val g = growth[cursor]
+        when {
+            g in 78..86 -> { score += 2; perfects++; say("PERFECT!") }
+            g in 70..90 -> { score += 1; say("RIPE") }
+            g > 100 -> { rotted++; say("ROTTEN") }
+            else -> say("TOO EARLY")
+        }
+        resow(cursor)
+    }
+
+    override fun step() {
+        if (over) return
+        timeLeft--
+        if (calloutFor > 0 && --calloutFor == 0) callout = ""
+        for (i in 0 until plots) {
+            growth[i] += speed[i]
+            if (growth[i] > 130) { rotted++; resow(i) }   // left far too long: it withers away
+        }
+        if (timeLeft <= 0) over = true
+    }
+
+    private fun resow(i: Int) { growth[i] = 0; speed[i] = rng.nextInt(1, 4) }
+    private fun say(s: String) { callout = s; calloutFor = 8 }
 }
 
 /** The 90s classic: a number 1-9 shows; will the next one be higher (A) or lower (C)? Five rounds. */

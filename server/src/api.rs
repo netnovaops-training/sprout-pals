@@ -27,7 +27,7 @@ const MAX_FRIENDS: i64 = 50;
 const HEARTS_PER_DAY: i64 = 100;
 const REGISTER_PER_HOUR_PER_IP: usize = 10;
 const MESSAGES: &[&str] = &["", "hi!", "miss you", "good morning", "good night", "let's play", "thank you", "proud of you"];
-const SPECIES: &[&str] = &["EGG", "JUN", "KONA", "RUSTY", "KARA", "DJ", "MAUI", "JASON"];
+const SPECIES: &[&str] = &["EGG", "JUN", "KONA", "RUSTY", "KARA", "DJ", "MAUI", "KARTA", "NATHAN", "JASON"];
 const STAGES: &[&str] = &["EGG", "BABY", "KID", "ADULT", "OLD", "GONE"];
 /// Visits last 1-4 hours; a garden shows up to 3 visitors at once.
 const MAX_VISIT_HOURS: i64 = 4;

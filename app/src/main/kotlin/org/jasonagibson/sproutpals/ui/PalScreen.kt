@@ -52,6 +52,7 @@ import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Shop
 import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.TicTacToe
+import org.jasonagibson.sproutpals.engine.PlantHarvest
 import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
@@ -314,7 +315,9 @@ private fun PanelOverlay(game: Game) {
         is Panel.Friends -> friendsText(game, p)
         Panel.Ended -> {
             val pet = game.pet
-            "${pet.species.title.uppercase()}\nRETURNED TO\nTHE GARDEN\n\n${pet.ended?.line ?: ""}\n\nB = NEW EGG"
+            val family = pet.ended == org.jasonagibson.sproutpals.engine.EndReason.NATURAL
+            "${pet.species.title.uppercase()}\nRETURNED TO\nTHE GARDEN\n\n${pet.ended?.line ?: ""}\n\n" +
+                if (family) "AND LEFT A FAMILY EGG!\n\nB = GENERATION ${pet.generation + 1}" else "B = NEW EGG"
         }
         is Panel.Update -> when {
             p.error != null -> "UPDATE FAILED\n${p.error}\n\nC = CLOSE"
@@ -337,6 +340,7 @@ private val HOW_TO = listOf(
     "JUMP ROPE\n\nPress B to jump\njust as the rope\nreaches the feet.\nIt speeds up!",
     "TIC-TAC-TOE\n\nYou are X.\nA / C: move\nB: place\nThree in a row wins",
     "HIGHER/LOWER\n\nWill the next\nnumber be...\nA: HIGHER\nC: LOWER\n5 rounds",
+    "PLANT & HARVEST\n\nA ◀  move  ▶ C\nB: pick when the\nmeter hits gold!\nRipe = 1  Gold = 2\nDon't let them rot",
 )
 
 /** While a game runs: its buttons, always in view at the top of the garden. */
@@ -347,6 +351,7 @@ private fun GameHintStrip(g: MiniGame) {
         is JumpRope -> "B: JUMP!   JUMPS ${g.score}"
         is TicTacToe -> "A/C: MOVE  B: PLACE"
         is HigherLower -> "A: HIGHER  C: LOWER   ${g.round}/${g.rounds}"
+        is PlantHarvest -> (if (g.callout.isNotBlank()) "${g.callout}   " else "A◀ ▶C  B: PICK   ") + "★${g.score}  ⏱${g.timeLeft / 8}"
     }
     Box(Modifier.fillMaxSize().padding(top = 50.dp), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.clip(RoundedCornerShape(6.dp)).background(INK.copy(alpha = 0.86f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
@@ -360,7 +365,7 @@ private fun gardenText(game: Game, p: Panel.Garden): String {
     val now = game.now()
     val head = "GARDEN   PLOT ${p.plot + 1}/${Garden.PLOTS}\n\n"
     if (p.picking) {
-        val list = Garden.CROPS.mapIndexed { i, c ->
+        val list = Garden.seeds(game.save).mapIndexed { i, c ->
             (if (i == p.seed) "> " else "  ") + "${c.name.padEnd(10)} ⏱${hours(c.growMinutes).padEnd(3)} ★${Garden.harvestPoints(game.save, c, now)}"
         }.joinToString("\n")
         return head + "PICK A SEED\n$list\n\n⏱ = WET HOURS TO GROW\n★ = STARS AT HARVEST\n\nA: NEXT  B: PLANT\nC: BACK"
@@ -387,6 +392,8 @@ private fun statusPage(game: Game, page: Int): String {
         0 -> "HUNGRY\n${hearts(pet.hunger)}"
         1 -> "HAPPY\n${hearts(pet.happy)}"
         2 -> "${pet.species.title.uppercase()}${if (pet.species.rare) " ★" else ""}\n${pet.stage.name}\nAGE ${ageDays}d  WT ${pet.weight}" +
+            (if (pet.generation > 1) "\nGENERATION ${pet.generation}" else "") +
+            (org.jasonagibson.sproutpals.engine.Abilities.describe(pet.species)?.let { "\n\n$it" } ?: "") +
             if (game.birthdaySoon) "\n\nBIRTHDAY\nTOMORROW!" else ""
         3 -> {
             val steps = game.save.stepsTotal

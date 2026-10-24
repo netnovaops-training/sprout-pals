@@ -120,7 +120,8 @@ object PetEngine {
         if (cracks < Rules.SHAKES_TO_HATCH) return s.copy(cracks = cracks)
         return s.copy(
             cracks = cracks, hatchedAt = now, lastTick = now, stage = Stage.BABY,
-            hunger = 2, happy = 2, hungerTimer = 0, happyTimer = 0, poopTimer = 0,
+            // a family egg's baby starts a little happier
+            hunger = 2, happy = if (s.generation > 1) 3 else 2, hungerTimer = 0, happyTimer = 0, poopTimer = 0,
         )
     }
 
@@ -152,7 +153,7 @@ object PetEngine {
         if (hungerTimer >= Rules.hungerEvery(s.stage)) { hunger = (hunger - 1).coerceAtLeast(0); hungerTimer = 0 }
         var happy = s.happy
         var happyTimer = s.happyTimer + 1
-        if (happyTimer >= Rules.happyEvery(s.stage)) { happy = (happy - 1).coerceAtLeast(0); happyTimer = 0 }
+        if (happyTimer >= Abilities.happyEvery(s.species, Rules.happyEvery(s.stage))) { happy = (happy - 1).coerceAtLeast(0); happyTimer = 0 }
         var poops = s.poops
         var poopTimer = s.poopTimer + 1
         if (poopTimer >= Rules.poopEvery(s.stage)) { poops = (poops + 1).coerceAtMost(Rules.MAX_POOPS); poopTimer = 0 }
@@ -194,7 +195,20 @@ object PetEngine {
     fun memoryOf(s: PetState) = MemoryCard(
         species = s.species, bornAt = s.bornAt, endedAt = s.endedAt ?: s.lastTick,
         reason = s.ended ?: EndReason.NATURAL, stage = s.stage, mistakes = s.totalMistakes,
+        generation = s.generation,
     )
+
+    /** Minutes of extra life a family egg's baby inherits. */
+    const val HEIRLOOM_LIFE = 24 * 60
+
+    /**
+     * The next egg. After a full, happy life it's a family egg: one generation on, with an
+     * heirloom extra day of life and a cheerier start (see [shake]).
+     */
+    fun nextEgg(old: PetState, now: Long, rng: Random, rarePercent: Int): PetState {
+        val egg = newPet(now, rng, rarePercent)
+        return if (old.ended == EndReason.NATURAL) egg.copy(generation = old.generation + 1, bonusLife = HEIRLOOM_LIFE) else egg
+    }
 
     // ---- Care actions. Each returns the new state and what happened. ----
 

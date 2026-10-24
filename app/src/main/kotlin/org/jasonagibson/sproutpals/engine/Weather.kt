@@ -58,6 +58,9 @@ object Weather {
             })
             WeatherKind.SUN, WeatherKind.SNOW -> if (alive) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy + 1).coerceAtMost(Rules.MAX_HEARTS)))
             WeatherKind.STORM -> {
+                // Jason troubleshoots it; Jun shrugs off half (see Abilities)
+                val saved = Abilities.blocks(s.pet.species, fromCreature = false, rng)
+                if (saved != null) return s to "${w.kind.icon} ${w.kind.title}!\n$saved"
                 if (alive) s = s.copy(pet = s.pet.copy(happy = (s.pet.happy - 1).coerceAtLeast(0)))
                 if (rng.nextInt(100) < 30) Garden.setBack(s, at, 60)?.let { s = it.first }
             }

@@ -93,7 +93,7 @@ class ShopTest {
         val counts = (1..n).groupingBy { PetEngine.pickSpecies(rng) }.eachCount()
         for (sp in Species.entries.filter { !it.rare }) {
             val share = counts.getValue(sp).toDouble() / n
-            assertTrue("$sp got $share", share in 0.155..0.175)
+            assertTrue("$sp got $share", share in 0.114..0.134)   // 99% / 8 regulars
         }
         assertTrue((counts[Species.JASON] ?: 0).toDouble() / n in 0.007..0.013)
     }

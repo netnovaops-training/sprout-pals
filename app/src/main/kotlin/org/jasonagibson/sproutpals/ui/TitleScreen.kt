@@ -55,9 +55,11 @@ internal data class Spot(val species: Species, val x: Int, val ground: Int, val 
 
 internal val CAST = listOf(
     // back row: the people, as in the reference picture
-    Spot(Species.KONA, 26, 72, 0),
+    Spot(Species.KONA, 18, 72, 0),
+    Spot(Species.KARTA, 49, 71, 3),
     Spot(Species.JASON, 80, 74, 1),
-    Spot(Species.JUN, 134, 72, 2),
+    Spot(Species.NATHAN, 111, 71, 0),
+    Spot(Species.JUN, 142, 72, 2),
     // front row: dogs on the outside, cats in the middle
     Spot(Species.RUSTY, 31, 110, 3),
     Spot(Species.MAUI, 72, 108, 1),

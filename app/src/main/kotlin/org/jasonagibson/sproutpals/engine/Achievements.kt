@@ -33,6 +33,7 @@ object Achievements {
         Feat("game_rope", "JUMP ROPE", "🪢"),
         Feat("game_ttt", "TIC-TAC-TOE", "⭕"),
         Feat("game_hilo", "HIGHER / LOWER", "🔢"),
+        Feat("game_harvest", "PLANT & HARVEST", "🌽"),
         Feat("plant", "PLANT A SEED", "🌱"),
         Feat("water", "WATER THE GARDEN", "💧"),
         Feat("harvest", "HARVEST A CROP", "🧺"),

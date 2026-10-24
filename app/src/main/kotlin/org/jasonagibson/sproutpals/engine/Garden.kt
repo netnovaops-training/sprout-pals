@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
  * A harvest pays points and puts the crop in the pantry, where the Feed menu can serve it.
  * All times are real clock milliseconds, so the bed keeps growing while the app is closed.
  */
-data class Crop(val id: String, val name: String, val growMinutes: Int, val points: Int)
+/** [regrows]: picking leaves the plant, half-grown again. [rare]: needs a golden seed to plant. */
+data class Crop(val id: String, val name: String, val growMinutes: Int, val points: Int, val regrows: Boolean = false, val rare: Boolean = false)
 
 @Serializable
 data class Plot(
@@ -32,7 +33,16 @@ object Garden {
         Crop("strawberry", "STRAWBERRY", 180, 6),
         Crop("tomato", "TOMATO", 240, 8),
         Crop("pumpkin", "PUMPKIN", 360, 12),
+        Crop("berries", "BERRY BUSH", 150, 4, regrows = true),
+        Crop("sunflower", "SUNFLOWER", 420, 15),
+        Crop("golden", "GOLDEN SPROUT", 480, 40, rare = true),
     )
+
+    /** Chance (in 100) that a harvest turns up a golden seed. */
+    const val GOLDEN_SEED_PERCENT = 4
+
+    /** The seeds on offer: every ordinary seed, plus golden if you have one. */
+    fun seeds(save: Save) = CROPS.filter { !it.rare || save.goldenSeeds > 0 }
 
     fun crop(id: String?) = CROPS.firstOrNull { it.id == id }
 
@@ -72,8 +82,10 @@ object Garden {
 
     /** Plants into an empty plot. Seeds are free; a fresh seed starts dry - water it! */
     fun plant(save: Save, i: Int, cropId: String, now: Long): Save {
-        if (plots(save)[i].crop != null || crop(cropId) == null) return save
-        return save.withPlot(i, Plot(crop = cropId, updatedAt = now))
+        val c = crop(cropId) ?: return save
+        if (plots(save)[i].crop != null || (c.rare && save.goldenSeeds <= 0)) return save
+        val s = if (c.rare) save.copy(goldenSeeds = save.goldenSeeds - 1) else save
+        return s.withPlot(i, Plot(crop = cropId, updatedAt = now))
     }
 
     fun water(save: Save, i: Int, now: Long): Save {
@@ -89,14 +101,21 @@ object Garden {
         val c = crop(p.crop) ?: return null
         if (state(p, now) != PlotState.RIPE) return null
         val pantry = save.pantry + c.id
-        return save.withPlot(i, Plot()).copy(points = save.points + harvestPoints(save, c, now), pantry = pantry) to c
+        // a berry bush stays planted and comes back half-grown (dry - it wants water again)
+        val after = if (c.regrows) Plot(crop = c.id, grown = c.growMinutes / 2, updatedAt = now) else Plot()
+        return save.withPlot(i, after).copy(points = save.points + harvestPoints(save, c, now), pantry = pantry) to c
     }
+
+    /** After a harvest: maybe a golden seed turned up in the soil. */
+    fun maybeGoldenSeed(save: Save, roll: Int): Pair<Save, Boolean> =
+        if (roll < GOLDEN_SEED_PERCENT) save.copy(goldenSeeds = save.goldenSeeds + 1) to true else save to false
 
     /** How long one watering keeps the soil wet: an hour more each for the ladybug and the rain barrel; half in a heat wave. */
     fun wetMinutes(save: Save, now: Long = 0L): Int {
-        val m = WET_MINUTES + (if (Shop.showing(save, "ladybug")) 60 else 0) + (if (Shop.showing(save, "rain_barrel")) 60 else 0)
+        val m = WET_MINUTES + (if (Shop.showing(save, "ladybug")) 60 else 0) + (if (Shop.showing(save, "rain_barrel")) 60 else 0) +
+            Abilities.extraWater(save.pet.species)
         return when (Weather.now(save, now)) {
-            WeatherKind.HEAT -> m / 2
+            WeatherKind.HEAT -> if (save.pet.species == Species.JASON) m else m / 2   // Jason troubleshoots the heat
             WeatherKind.SNOW -> 0   // frozen soil: the water just ices over
             else -> m
         }

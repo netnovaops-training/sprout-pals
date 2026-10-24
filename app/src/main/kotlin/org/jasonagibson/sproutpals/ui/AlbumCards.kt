@@ -133,6 +133,7 @@ fun BookCard(game: Game, p: Panel.Book) {
                 BasicText(m.species.title.uppercase() + if (m.species.rare) "  ✨ RARE" else "", style = mono.copy(fontSize = 16.sp))
                 BasicText("${Instant.ofEpochMilli(m.bornAt).atZone(zone).format(DAY)} - ${Instant.ofEpochMilli(m.endedAt).atZone(zone).format(DAY)}", style = mono.copy(fontSize = 11.sp))
                 BasicText("$days DAYS · REACHED ${m.stage.name}", style = mono.copy(fontSize = 11.sp))
+                if (m.generation > 1) BasicText("GENERATION ${m.generation}", style = mono.copy(fontSize = 11.sp, color = Color(0xFF8E4FC9)))
                 BasicText(if (m.mistakes == 0) "NO CARE MISTAKES!" else "${m.mistakes} CARE MISTAKES", style = mono.copy(fontSize = 10.sp, color = INK.copy(alpha = 0.7f)))
             }
         }

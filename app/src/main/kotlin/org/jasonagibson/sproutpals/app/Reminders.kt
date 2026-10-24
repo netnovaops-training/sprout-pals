@@ -49,6 +49,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val (fresh, keys) = Alerts.fresh(save, now, eve)
         save = save.copy(notified = keys)
         store.save(save)
+        PalWidget.refresh(applicationContext, save)
         fresh.forEach { notify(applicationContext, it.key, it.text) }
         news.takeLast(2).forEach { notify(applicationContext, "news:$it", it.replace('\n', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }) }
         return Result.success()

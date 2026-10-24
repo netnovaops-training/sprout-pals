@@ -205,6 +205,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 } else {
                     facingLeft = false
                     petLift = DIG[f % DIG.size]
+                    findSpringEgg()
                 }
             }
             Move.BALL -> { facingLeft = true; petLift = HOP[f % HOP.size] }
@@ -364,6 +365,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 is org.jasonagibson.sproutpals.engine.JumpRope -> "game_rope"
                 is org.jasonagibson.sproutpals.engine.TicTacToe -> "game_ttt"
                 is org.jasonagibson.sproutpals.engine.HigherLower -> "game_hilo"
+                is org.jasonagibson.sproutpals.engine.PlantHarvest -> "game_harvest"
                 else -> "play_other"
             },
         )
@@ -381,7 +383,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 if (n > 0) panel = p.copy(choice = (p.choice + 1) % n, note = "")
             }
             is Panel.Garden -> panel =
-                if (p.picking) p.copy(seed = (p.seed + 1) % Garden.CROPS.size)
+                if (p.picking) p.copy(seed = (p.seed + 1) % Garden.seeds(save).size)
                 else p.copy(plot = (p.plot + 1) % Garden.PLOTS, note = "")
             // last page: A or B closes instead of looping back to the first (C closes any time)
             is Panel.Status -> panel = if (p.page + 1 >= STATUS_PAGES) Panel.None else p.copy(page = p.page + 1)
@@ -489,7 +491,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     private fun gardenPress(p: Panel.Garden) {
         val now = now()
         if (p.picking) {
-            val crop = Garden.CROPS[p.seed]
+            val crop = Garden.seeds(save).getOrNull(p.seed) ?: return
             commit(Garden.plant(save, p.plot, crop.id, now))
             count("plant")
             onSound(Chiptune.Sfx.C)
@@ -512,10 +514,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             PlotState.RIPE -> {
                 val before = save.points
                 val (next, crop) = Garden.harvest(save, p.plot, now) ?: return
-                commit(next)
+                val (withSeed, golden) = Garden.maybeGoldenSeed(next, rng.nextInt(100))
+                commit(withSeed)
                 onSound(Chiptune.Sfx.ARRIVE)
                 helpInGarden()
                 count("harvest")
+                if (golden) keyItem("🌟", "A GOLDEN SEED!")
+                if (crop.rare) keyItem("👑", "GOLDEN SPROUT HARVESTED!")
                 p.copy(note = "+${next.points - before} ★!\n${crop.name} TO THE PANTRY")
             }
         }
@@ -603,7 +608,9 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     }
 
     private fun newEgg() {
-        commit(save.copy(pet = PetEngine.newPet(now(), rng, Shop.rarePercent(save))))
+        val egg = PetEngine.nextEgg(pet, now(), rng, Shop.rarePercent(save))
+        commit(save.copy(pet = egg))
+        if (egg.generation > 1) keyItem("🥚", "FAMILY EGG! GENERATION ${egg.generation}")
         panel = Panel.None
         selected = -1
     }
@@ -634,6 +641,17 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             toastUntil = realNow + if (it.key) 4_000 else 3_000
             onSound(if (it.key) Chiptune.Sfx.KEY_ITEM else Chiptune.Sfx.ACHIEVE)
         }
+    }
+
+    // ---------- seasons ----------
+
+    /** During the spring egg hunt, gardening turns up the hidden egg - once a year. */
+    private fun findSpringEgg() {
+        val today = java.time.Instant.ofEpochMilli(now()).atZone(zone).toLocalDate()
+        if (org.jasonagibson.sproutpals.engine.Calendar.holiday(today) != org.jasonagibson.sproutpals.engine.Holiday.EGG_HUNT) return
+        if (save.eggYear == today.year) return
+        commit(save.copy(eggYear = today.year, points = save.points + org.jasonagibson.sproutpals.engine.Calendar.EGG_STARS))
+        keyItem("🥚", "SPRING EGG FOUND!  +${org.jasonagibson.sproutpals.engine.Calendar.EGG_STARS} ★")
     }
 
     // ---------- buddy ----------
@@ -686,6 +704,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val (_, what) = friendActions[p.choice]
         when {
             what > 0 && away -> panel = p.copy(note = "YOUR PAL IS ALREADY\nOUT VISITING")
+            what > 0 && !org.jasonagibson.sproutpals.engine.Abilities.canVisit(pet.species) ->
+                panel = p.copy(note = "JASON IS BUSY\nTROUBLESHOOTING -\nHE CAN'T GO VISITING")
             what > 0 && (pet.stage == Stage.EGG || pet.ended != null) -> panel = p.copy(note = "NOBODY TO SEND YET")
             what > 0 -> { onVisitOut(p.friend, what); panel = p.copy(note = "PACKING A BAG...") }
             else -> { onHeartOut(p.friend, if (what == 0) "hi!" else "miss you"); panel = p.copy(note = "♥ SENT!"); count("heart") }

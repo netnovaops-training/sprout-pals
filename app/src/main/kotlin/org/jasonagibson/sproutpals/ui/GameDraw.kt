@@ -11,6 +11,7 @@ import org.jasonagibson.sproutpals.engine.JumpRope
 import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.PetState
+import org.jasonagibson.sproutpals.engine.PlantHarvest
 import org.jasonagibson.sproutpals.engine.TicTacToe
 import kotlin.math.PI
 import kotlin.math.cos
@@ -35,7 +36,44 @@ fun DrawScope.drawMiniGame(g: MiniGame, pet: PetState, frame: Int, top: Int, gro
         is JumpRope -> jumpRope(g, pet, frame, ground, u)
         is TicTacToe -> ticTacToe(g, pet, frame, top, ground, u)
         is HigherLower -> higherLower(g, pet, frame, top, ground, u)
+        is PlantHarvest -> plantHarvest(g, pet, frame, top, ground, u)
     }
+}
+
+// ---------- Plant & Harvest ----------
+
+private fun plotCenter(i: Int) = 10 + i * 19
+
+private fun DrawScope.plantHarvest(g: PlantHarvest, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+    val bedY = ground - 14
+    for (i in 0 until g.plots) {
+        val cx = plotCenter(i)
+        val gr = g.growth[i]
+        px(cx - 7, bedY, 15, 3, 0xFF5C3A1A, u)                          // soil
+        val rotten = gr > 100
+        val stem = (gr / 9).coerceIn(1, 10)
+        val leaf = if (rotten) 0xFF8A7A4AL else 0xFF5BC236L
+        px(cx, bedY - stem, 1, stem, leaf, u)
+        if (stem > 3) { px(cx - 2, bedY - stem + 2, 2, 1, leaf, u); px(cx + 1, bedY - stem + 3, 2, 1, leaf, u) }
+        when {
+            rotten -> px(cx - 2, bedY - stem - 2, 5, 3, 0xFF6A4A2AL, u)                          // wilted, brown
+            gr >= 70 -> {
+                // the fruit, glowing gold while it's perfect
+                if (gr in 78..86 && f % 4 < 3) px(cx - 4, bedY - stem - 5, 9, 8, 0x66FFE27AL, u)
+                px(cx - 2, bedY - stem - 3, 5, 4, 0xFFE0344BL, u); px(cx - 1, bedY - stem - 3, 1, 1, 0xFFFFFFFFL, u)
+            }
+            gr >= 45 -> px(cx - 1, bedY - stem - 2, 3, 2, 0xFF8FD46AL, u)                       // a green bud
+        }
+        // ripeness meter under each plant: green fill, gold band = perfect
+        val meterY = bedY + 5
+        px(cx - 6, meterY, 13, 2, 0xFF2B2B2BL, u)
+        px(cx - 6 + 13 * 78 / 110, meterY, 2, 2, 0xFFFFD84AL, u)
+        px(cx - 6, meterY, (13 * gr.coerceAtMost(110) / 110).coerceAtLeast(1), 1, if (rotten) 0xFF8A5A2BL else 0xFF5BC236L, u)
+    }
+    // the pal stands by the chosen plant, with an arrow over it
+    val cx = plotCenter(g.cursor)
+    if (f % 4 < 3) { px(cx - 1, top + 6, 3, 1, 0xFFFFFFFFL, u); px(cx, top + 7, 1, 1, 0xFFFFFFFFL, u) }
+    pal(pet, cx.toFloat(), ground.toFloat() + 1, u, if (g.callout == "PERFECT!") CharacterArt.Pose.clap(pet.species.kind, f) else CharacterArt.Pose.STAND, 22f)
 }
 
 // ---------- Fruit Catch ----------

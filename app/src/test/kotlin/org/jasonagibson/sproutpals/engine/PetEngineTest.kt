@@ -109,8 +109,9 @@ class PetEngineTest {
         val n = 100_000
         val jasons = (1..n).count { PetEngine.pickSpecies(rng) == Species.JASON }
         assertTrue("got $jasons", jasons in 850..1150)
+        // 8 regulars share the other 99%: about 12.4% each
         val kona = (1..n).count { PetEngine.pickSpecies(rng) == Species.KONA }
-        assertTrue("got $kona", kona in 15_500..17_500)
+        assertTrue("got $kona", kona in 11_400..13_400)
     }
 
     @Test fun `steps turn into points and survive a reboot`() {
