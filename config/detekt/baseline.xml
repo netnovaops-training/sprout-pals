@@ -19,7 +19,7 @@
     <ID>CyclomaticComplexMethod:Outfits.kt$private fun recolor(img: ImageBitmap, band: ClosedFloatingPointRange&lt;Float&gt;, cloth: Cloth): ImageBitmap</ID>
     <ID>CyclomaticComplexMethod:PalScreen.kt$private fun statusPage(game: Game, page: Int): String</ID>
     <ID>CyclomaticComplexMethod:PalWidget.kt$PalWidget.Companion$fun refresh(context: Context, save: Save)</ID>
-    <ID>CyclomaticComplexMethod:PetEngine.kt$PetEngine$private fun minute(s0: PetState, t: Long, zone: ZoneId, rng: Random): PetState</ID>
+    <ID>CyclomaticComplexMethod:PetEngine.kt$PetEngine$private fun minute(s0: PetState, t: Long, zone: TimeZone, rng: Random): PetState</ID>
     <ID>CyclomaticComplexMethod:SeasonDraw.kt$fun DrawScope.drawSeasonAndHoliday(season: Season, holiday: Holiday?, f: Int, evening: Boolean, eggFound: Boolean, px: Float)</ID>
     <ID>CyclomaticComplexMethod:Shading.kt$fun DrawScope.shaded(g: Grid, pal: Map&lt;Char, Long&gt;, x: Int, y: Int, px: Float, flip: Boolean = false)</ID>
     <ID>CyclomaticComplexMethod:Sprites.kt$Sprites$fun body(species: Species, stage: Stage): Grid</ID>
@@ -30,6 +30,7 @@
     <ID>EmptyElseBlock:Critters.kt$if (!drawDecorPreview(id, u)) drawOutfitPreview(id, u)</ID>
     <ID>EmptyElseBlock:Game.kt$Game$if (f % 2 == 0) facingLeft = !facingLeft</ID>
     <ID>EmptyElseBlock:MiniGamesTest.kt$MiniGamesTest$if (good.phase == good.period - 4) good.b()</ID>
+    <ID>FunctionNaming:IosApp.kt$fun MainViewController(): UIViewController</ID>
     <ID>LongMethod:Lcd.kt$fun DrawScope.drawLcd(game: Game)</ID>
     <ID>LongMethod:Visitors.kt$Visitors$fun hour(save: Save, at: Long, night: Boolean, rng: Random): Pair&lt;Save, List&lt;String&gt;&gt;</ID>
     <ID>LongParameterList:CharacterDraw.kt$( species: Species, stage: Stage, centerX: Float, ground: Float, unitPx: Float, unitsPerPixel: Float, faceLeft: Boolean = false, pose: Int = 0, layers: (ImageBitmap) -&gt; List&lt;ImageBitmap&gt; = { emptyList() }, )</ID>
@@ -49,8 +50,8 @@
     <ID>LongParameterList:Theme.kt$Theme$(out: DoubleArray, at: Int, len: Int, midi: Int, vol: Double, rate: Int)</ID>
     <ID>LongParameterList:TitleScreen.kt$(x: Int, y: Int, w: Int, h: Int, c: Long, p: Float)</ID>
     <ID>MemberNameEqualsClassName:Friends.kt$Friends$suspend fun friends(token: String): Reply&lt;List&lt;Friend&gt;&gt;</ID>
-    <ID>NestedBlockDepth:Chiptune.kt$Chiptune$private fun render(voices: List&lt;Voice&gt;, sequential: Boolean): ShortArray</ID>
     <ID>NestedBlockDepth:Critters.kt$fun DrawScope.drawFrontCritters(save: Save, f: Int, top: Int, ground: Int, u: Float, headX: Int, headY: Int, night: Boolean)</ID>
+    <ID>NestedBlockDepth:Jingles.kt$Jingles$fun pcm(sfx: Sfx, rate: Int): ShortArray</ID>
     <ID>NestedBlockDepth:Lcd.kt$fun DrawScope.drawLcd(game: Game)</ID>
     <ID>NestedBlockDepth:PalScreen.kt$@Composable private fun PanelOverlay(game: Game)</ID>
     <ID>NestedBlockDepth:SeasonDraw.kt$fun DrawScope.drawSeasonAndHoliday(season: Season, holiday: Holiday?, f: Int, evening: Boolean, eggFound: Boolean, px: Float)</ID>
@@ -64,6 +65,7 @@
     <ID>TooManyFunctions:Outfits.kt$org.jasonagibson.sproutpals.ui.Outfits.kt</ID>
     <ID>TooManyFunctions:PalScreen.kt$org.jasonagibson.sproutpals.ui.PalScreen.kt</ID>
     <ID>TooManyFunctions:PetEngine.kt$PetEngine</ID>
+    <ID>TooManyFunctions:PetEngineTest.kt$PetEngineTest</ID>
     <ID>TooManyFunctions:Shop.kt$Shop</ID>
     <ID>VariableNaming:Lcd.kt$val P = CharacterArt.Pose</ID>
   </CurrentIssues>

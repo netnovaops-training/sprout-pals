@@ -1,0 +1,11 @@
+# Spell-check settings for the `typos` checker (shared checks). Add words it flags that are correct.
+[default.extend-words]
+iy = "iy"            # icon y-coordinate next to ix (ui/Lcd.kt)
+PN = "PN"            # part of Apple's AVAudioPCMBuffer(pCMFormat = ...) parameter name
+
+[files]
+extend-exclude = [
+  "*.lock",
+  "app/src/main/res/drawable-nodpi/*",
+  "art/source/*",
+]

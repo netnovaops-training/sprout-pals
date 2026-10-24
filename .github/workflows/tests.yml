@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   app:
-    name: app unit tests (Gradle)
+    name: game unit tests + Android build (Gradle)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -33,19 +33,20 @@ jobs:
           java-version: "17"
       - name: Unit tests
         # The Android SDK is already on the runner; Gradle fetches the platform it needs.
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+        # the game's tests live in :shared (they run on the JVM); the Android app must still build around it
+        run: ./gradlew --no-daemon :shared:testAndroidHostTest :app:assembleDebug
       - name: Summary
         if: always()
         run: |
           set -u
           shopt -s nullglob
-          files=(app/build/test-results/testDebugUnitTest/*.xml)
+          mapfile -t files < <(find shared/build -path '*test-results*' -name 'TEST-*.xml')
           tests=0; failures=0
           for f in "${files[@]}"; do
             t=$(grep -o 'tests="[0-9]*"' "$f" | head -1 | grep -o '[0-9]*'); tests=$((tests + t))
             x=$(grep -o 'failures="[0-9]*"' "$f" | head -1 | grep -o '[0-9]*'); failures=$((failures + x))
           done
-          echo "### App unit tests: $tests tests in ${#files[@]} files, $failures failed" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "### Game unit tests: $tests tests in ${#files[@]} files, $failures failed" | tee -a "$GITHUB_STEP_SUMMARY"
 
   server:
     name: server tests (cargo)

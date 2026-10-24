@@ -15,12 +15,14 @@ on:
     branches: [main]
     paths:
       - "app/**"
+      - "shared/**"
       - "config/detekt/**"
       - ".github/workflows/detekt.yml"
   pull_request:
     branches: [main]
     paths:
       - "app/**"
+      - "shared/**"
       - "config/detekt/**"
       - ".github/workflows/detekt.yml"
   schedule:
@@ -72,7 +74,7 @@ jobs:
           # Exit code 0: nothing new. 2: new findings (expected, handled below). Anything else is a real failure.
           rc=0
           java -jar detekt-cli.jar \
-            --input app/src \
+            --input app/src,shared/src \
             --config config/detekt/detekt.yml \
             --build-upon-default-config \
             --baseline config/detekt/baseline.xml \

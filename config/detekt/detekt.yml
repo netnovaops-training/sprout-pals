@@ -26,6 +26,10 @@ naming:
   FunctionNaming:
     ignoreAnnotated:
       - 'Composable'          # Compose functions are named like types (CapitalLetters)
+    excludes:
+      # test names are sentences in `backticks`; detekt knows test/ folders but not KMP's androidHostTest/
+      - '**/androidHostTest/**'
+      - '**/commonTest/**'
   MatchingDeclarationName:
     active: false
 
