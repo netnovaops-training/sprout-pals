@@ -84,7 +84,6 @@ class JumpRope : MiniGame("JUMP ROPE") {
     /** Frames left in the air (0 = on the ground). */
     var air = 0
         private set
-    private var landedThisSwing = false
 
     override val result get() = if (score == 0) "TRIPPED!" else "$score JUMPS IN A ROW!"
     override fun points() = (score / 3).coerceIn(if (score > 0) 1 else 0, 10)

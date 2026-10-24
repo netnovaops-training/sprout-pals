@@ -57,8 +57,6 @@ import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
 
-private val SHELL = Color(0xFF2E5E3A)
-private val SHELL_EDGE = Color(0xFF1E4128)
 private val CREAM = Color(0xFFF3E9C6)
 private val INK = Color(0xFF1E2A1C)
 
@@ -429,18 +427,6 @@ private fun ShakeBanner() {
         Box(Modifier.clip(RoundedCornerShape(6.dp)).background(INK).padding(horizontal = 12.dp, vertical = 6.dp)) {
             BasicText("SHAKE TO OPEN!", style = lcdText.copy(color = CREAM, fontSize = 18.sp))
         }
-    }
-}
-
-@Composable
-private fun Toggle(label: String, on: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.padding(start = 8.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (on) CREAM else SHELL_EDGE)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        BasicText("$label ${if (on) "ON" else "OFF"}", style = lcdText.copy(fontSize = 13.sp, color = if (on) INK else CREAM))
     }
 }
 

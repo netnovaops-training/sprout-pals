@@ -1,0 +1,174 @@
+# detekt looks for common mistakes in the Kotlin code of the app in app/src (https://detekt.dev).
+# It reads the source text only; no Gradle build is run. Same setup as garden-for-all.
+#
+# Only NEW findings count. config/detekt/baseline.xml lists what detekt already found when it was switched
+# on (10-24); those are ignored. A new finding shows up as an alert in the Security tab (Code scanning,
+# category "detekt") and in the run's summary, but it never turns the run red: this is a hint, not a gate.
+# The run is red only when detekt itself breaks (the download or its checksum fails, detekt crashes or writes
+# no report). The full result is kept as an artifact for 14 days.
+#
+# To update the baseline: run detekt with --create-baseline (same arguments as below) and commit the file.
+name: detekt
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "config/detekt/**"
+      - ".github/workflows/detekt.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "config/detekt/**"
+      - ".github/workflows/detekt.yml"
+  schedule:
+    - cron: '43 4 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: detekt-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The detekt command-line program, checked against the SHA-256 Maven Central publishes for it.
+  DETEKT_VERSION: "1.23.8"
+  DETEKT_SHA256: "3afe89a11120303c73c9bdda3d8fe558dd9070a6937d27819ddc04b275381245"
+
+jobs:
+  detekt:
+    name: Run detekt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # only to send the findings to the Security tab
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download detekt and check its fingerprint
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            --output detekt-cli.jar \
+            "https://repo1.maven.org/maven2/io/gitlab/arturbosch/detekt/detekt-cli/${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}-all.jar"
+          echo "${DETEKT_SHA256}  detekt-cli.jar" | sha256sum --check --strict -
+
+      - name: Run detekt
+        id: detekt
+        run: |
+          # Exit code 0: nothing new. 2: new findings (expected, handled below). Anything else is a real failure.
+          rc=0
+          java -jar detekt-cli.jar \
+            --input app/src \
+            --config config/detekt/detekt.yml \
+            --build-upon-default-config \
+            --baseline config/detekt/baseline.xml \
+            --report sarif:detekt.sarif \
+            --report md:detekt.md \
+            --report txt:detekt.txt || rc=$?
+          echo "detekt exit code: $rc"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Summarise, and make the file paths in the SARIF relative to the repository
+        env:
+          DETEKT_RC: ${{ steps.detekt.outputs.rc }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys
+          rc = int(os.environ["DETEKT_RC"])
+          ws = os.environ["GITHUB_WORKSPACE"].rstrip("/") + "/"
+          problems = []
+          if rc not in (0, 2):
+              problems.append("detekt exited with code %d (0 = clean, 2 = new findings)" % rc)
+          results = []
+          try:
+              with open("detekt.sarif", encoding="utf-8") as f:
+                  sarif = json.load(f)
+              for run in sarif.get("runs", []):
+                  for res in run.get("results", []):
+                      for loc in res.get("locations", []):
+                          art = loc.get("physicalLocation", {}).get("artifactLocation", {})
+                          uri = art.get("uri", "")
+                          if uri.startswith("file://"):
+                              uri = uri[len("file://"):]
+                          if uri.startswith(ws):
+                              uri = uri[len(ws):]
+                          art["uri"] = uri
+                      results.append(res)
+              with open("detekt.sarif", "w", encoding="utf-8") as f:
+                  json.dump(sarif, f, indent=2)
+          except (OSError, ValueError) as e:
+              problems.append("no usable detekt.sarif report (%s)" % e)
+          for name in ("detekt.md", "detekt.txt"):
+              if not os.path.isfile(name):
+                  problems.append("missing report " + name)
+          baseline = 0
+          try:
+              with open("config/detekt/baseline.xml", encoding="utf-8") as f:
+                  baseline = len(re.findall(r"<ID>", f.read()))
+          except OSError:
+              problems.append("baseline.xml is missing")
+          out = ["### detekt " + os.environ["DETEKT_VERSION"], "",
+                 "- new findings: %d" % len(results),
+                 "- known findings in the baseline (ignored): %d" % baseline,
+                 "- detekt exit code: %d" % rc, ""]
+          if results:
+              out += ["| Rule | File | Line | Message |", "|---|---|---|---|"]
+              for r in results[:50]:
+                  loc = r["locations"][0]["physicalLocation"]
+                  line = loc.get("region", {}).get("startLine", "")
+                  msg = r.get("message", {}).get("text", "").replace("|", "\\|").replace("\n", " ")
+                  out.append("| `%s` | `%s` | %s | %s |" % (r.get("ruleId", "?"), loc["artifactLocation"]["uri"], line, msg))
+              for r in results:
+                  loc = r["locations"][0]["physicalLocation"]
+                  line = loc.get("region", {}).get("startLine", 1)
+                  print("::warning file=%s,line=%s,title=detekt %s::%s" % (
+                      loc["artifactLocation"]["uri"], line, r.get("ruleId", "?"), r.get("message", {}).get("text", "")))
+          else:
+              out.append("No new findings.")
+          if problems:
+              out += ["", "**detekt itself failed:**"] + ["- " + p for p in problems]
+          text = "\n".join(out) + "\n"
+          with open("detekt-summary.md", "w", encoding="utf-8") as f:
+              f.write(text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(text)
+          print("::notice title=detekt::%d new findings (%d known ones in the baseline)" % (len(results), baseline))
+          if problems:
+              for p in problems:
+                  print("::error title=detekt::" + p)
+              sys.exit(1)
+          PY
+
+      - name: Send the findings to the Security tab (category detekt)
+        if: ${{ always() && hashFiles('detekt.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: detekt.sarif
+          category: detekt
+
+      - name: Keep the full result for 14 days
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: detekt-results
+          path: |
+            detekt.sarif
+            detekt.md
+            detekt.txt
+            detekt-summary.md
+          retention-days: 14
+          if-no-files-found: warn

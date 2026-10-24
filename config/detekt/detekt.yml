@@ -1,0 +1,33 @@
+# detekt settings for the Android app (Kotlin, app/src). Used with --build-upon-default-config, so this
+# file only lists what is DIFFERENT from detekt's own defaults (v1.23.x). Same settings as garden-for-all.
+# The workflow is .github/workflows/detekt.yml; old findings live in baseline.xml next to this file.
+#
+# What is on: the bug-finding rule sets (potential-bugs, exceptions, empty-blocks, coroutines, performance),
+# plus complexity and naming with settings that suit Jetpack Compose. What is off: "style", which is
+# mostly taste (magic numbers, return counts, line lengths) and would bury the real findings - a pixel-art
+# game is full of numbers on purpose.
+
+complexity:
+  LongMethod:
+    ignoreAnnotated:
+      - 'Composable'          # a screen drawn in Compose is one long function by design
+  LongParameterList:
+    ignoreDefaultParameters: true
+    ignoreAnnotated:
+      - 'Composable'
+  CyclomaticComplexMethod:
+    ignoreAnnotated:
+      - 'Composable'
+  TooManyFunctions:
+    ignoreAnnotated:
+      - 'Composable'
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated:
+      - 'Composable'          # Compose functions are named like types (CapitalLetters)
+  MatchingDeclarationName:
+    active: false
+
+style:
+  active: false

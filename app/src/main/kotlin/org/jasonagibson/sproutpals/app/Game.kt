@@ -379,7 +379,6 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 is org.jasonagibson.sproutpals.engine.TicTacToe -> "game_ttt"
                 is org.jasonagibson.sproutpals.engine.HigherLower -> "game_hilo"
                 is org.jasonagibson.sproutpals.engine.PlantHarvest -> "game_harvest"
-                else -> "play_other"
             },
         )
     }

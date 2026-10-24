@@ -1,0 +1,182 @@
+# Deep scans: slower, broader checks. NOT run on every push (same idea as garden-for-all).
+#
+# When: on every pull request into main, every Sunday 03:17 UTC, by hand (Actions tab, "Run workflow"),
+# and when burst-gate.yml sees a lot of commits in the last three days (it starts this workflow).
+#
+# What lands in the Security tab (Code scanning), each tool under its own category: semgrep, trivy-fs,
+# osv-scanner. cargo-audit and the dependency review make no alerts; their result is the job result.
+# Findings already in the code when this was switched on do not turn the run red: a job only fails when a
+# tool breaks or (for the audit) when something vulnerable shows up.
+name: deep-scans
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deep-scans-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Semgrep 1.181.0 (finds things, does not fail on them)
+        run: |
+          set -eu
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src \
+            semgrep/semgrep:1.181.0@sha256:81474464c1f07483ba0682a44787fd93c91397419762a04abe2bafaae396304b \
+            semgrep scan --config p/kotlin --config p/rust --config p/secrets \
+            --metrics=off --sarif --output semgrep.sarif --quiet
+          test -s semgrep.sarif
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('semgrep.sarif'))['runs']))")
+          echo "::notice title=semgrep::$count findings"
+          echo "### Semgrep: $count findings (see Security, Code scanning, category semgrep)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to Code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+          wait-for-processing: true
+
+  trivy-fs:
+    name: trivy (files)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trivy file-system scan (finds things, does not fail on them)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1,ghcr.io/aquasecurity/trivy-java-db:1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: '0'
+      - name: Count
+        run: |
+          set -eu
+          test -s trivy-fs.sarif
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('trivy-fs.sarif'))['runs']))")
+          echo "::notice title=trivy::$count findings (HIGH and CRITICAL)"
+          echo "### Trivy (files): $count HIGH/CRITICAL findings (Security, Code scanning, category trivy-fs)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to Code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+          wait-for-processing: true
+
+  osv-scanner:
+    name: osv-scanner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: OSV-Scanner on the server's lock file (finds things, does not fail on them)
+        id: osv
+        continue-on-error: true # osv-scanner exits 1 when it finds a vulnerability; a missing report below catches a real crash
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --lockfile=server/Cargo.lock
+            --format=sarif
+            --output=osv-scanner.sarif
+      - name: The report must exist (otherwise the tool crashed)
+        run: |
+          set -eu
+          test -s osv-scanner.sarif
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('osv-scanner.sarif'))['runs']))")
+          echo "::notice title=osv-scanner::$count findings (tool exit: ${OSV_OUTCOME})"
+          echo "### OSV-Scanner: $count findings in server/Cargo.lock (Security, Code scanning, category osv-scanner)" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          OSV_OUTCOME: ${{ steps.osv.outcome }}
+      - name: Upload to Code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: osv-scanner.sarif
+          category: osv-scanner
+          wait-for-processing: true
+
+  cargo-audit:
+    name: cargo-audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache cargo-audit
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-0.22.2-${{ runner.os }}
+      - name: Install cargo-audit 0.22.2
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-audit --version 0.22.2
+      - name: Audit server/Cargo.lock against the RustSec advisory database
+        run: |
+          set -u
+          rc=0
+          cargo audit --file server/Cargo.lock 2>&1 | tee audit.txt || rc=$?
+          {
+            echo "### cargo-audit 0.22.2 on server/Cargo.lock"
+            echo "- exit code $rc (0 = no vulnerable crates)"
+            grep -E '^(Crate|ID|Title):|^warning:' audit.txt | head -40 | sed 's/^/    /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=cargo-audit::exit code $rc"
+          exit "$rc"
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never

@@ -1,0 +1,70 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:Game.kt$Game$pet.stage == Stage.EGG || pet.sleeping || pet.ended != null || effect != Effect.NONE</ID>
+    <ID>ComplexCondition:Lcd.kt$mood != Mood.NONE &amp;&amp; !pet.sick &amp;&amp; (f / 8) % 8 &lt; 3 &amp;&amp; game.effect == Effect.NONE</ID>
+    <ID>ComplexCondition:Visitors.kt$Visitors$Abilities.bringsGuests(s.pet.species) &amp;&amp; s.pet.ended == null &amp;&amp; s.pet.hatchedAt != null &amp;&amp; s.guestCreature == null &amp;&amp; chance(Abilities.GUEST_CHANCE)</ID>
+    <ID>ComplexCondition:Visitors.kt$Visitors$stings &amp;&amp; alive &amp;&amp; awake &amp;&amp; !s.pet.sick &amp;&amp; bad(2)</ID>
+    <ID>CyclomaticComplexMethod:Alerts.kt$Alerts$fun current(save: Save, now: Long, birthdayEve: Boolean): List&lt;Alert&gt;</ID>
+    <ID>CyclomaticComplexMethod:Critters.kt$fun DrawScope.drawItemPreview(id: String, f: Int, u: Float)</ID>
+    <ID>CyclomaticComplexMethod:Game.kt$Game$fun pressA()</ID>
+    <ID>CyclomaticComplexMethod:Game.kt$Game$fun pressB(): Boolean</ID>
+    <ID>CyclomaticComplexMethod:Game.kt$Game$fun tick(realNow: Long)</ID>
+    <ID>CyclomaticComplexMethod:Game.kt$Game$private fun animate(realNow: Long)</ID>
+    <ID>CyclomaticComplexMethod:Game.kt$Game$private fun care(action: (PetState) -&gt; Pair&lt;PetState, Outcome&gt;, fx: Effect)</ID>
+    <ID>CyclomaticComplexMethod:Lcd.kt$fun DrawScope.drawLcd(game: Game)</ID>
+    <ID>CyclomaticComplexMethod:Lcd.kt$private fun poseFor(game: Game, lift: Int): Int</ID>
+    <ID>CyclomaticComplexMethod:Mood.kt$Moods$fun of(pet: PetState, weather: WeatherKind?, company: Boolean): Mood</ID>
+    <ID>CyclomaticComplexMethod:Outfits.kt$private fun recolor(img: ImageBitmap, band: ClosedFloatingPointRange&lt;Float&gt;, cloth: Cloth): ImageBitmap</ID>
+    <ID>CyclomaticComplexMethod:PalScreen.kt$private fun statusPage(game: Game, page: Int): String</ID>
+    <ID>CyclomaticComplexMethod:PalWidget.kt$PalWidget.Companion$fun refresh(context: Context, save: Save)</ID>
+    <ID>CyclomaticComplexMethod:PetEngine.kt$PetEngine$private fun minute(s0: PetState, t: Long, zone: ZoneId, rng: Random): PetState</ID>
+    <ID>CyclomaticComplexMethod:SeasonDraw.kt$fun DrawScope.drawSeasonAndHoliday(season: Season, holiday: Holiday?, f: Int, evening: Boolean, eggFound: Boolean, px: Float)</ID>
+    <ID>CyclomaticComplexMethod:Shading.kt$fun DrawScope.shaded(g: Grid, pal: Map&lt;Char, Long&gt;, x: Int, y: Int, px: Float, flip: Boolean = false)</ID>
+    <ID>CyclomaticComplexMethod:Sprites.kt$Sprites$fun body(species: Species, stage: Stage): Grid</ID>
+    <ID>CyclomaticComplexMethod:Theme.kt$Theme$fun render(rate: Int): Pair&lt;ShortArray, Int&gt;</ID>
+    <ID>CyclomaticComplexMethod:Visitors.kt$Visitors$fun hour(save: Save, at: Long, night: Boolean, rng: Random): Pair&lt;Save, List&lt;String&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:Weather.kt$Weather$fun begin(save: Save, at: Long, rng: Random): Pair&lt;Save, String?&gt;</ID>
+    <ID>CyclomaticComplexMethod:WeatherDraw.kt$fun DrawScope.drawWeather(kind: WeatherKind, f: Int, top: Int, h: Int, px: Float)</ID>
+    <ID>EmptyElseBlock:Critters.kt$if (!drawDecorPreview(id, u)) drawOutfitPreview(id, u)</ID>
+    <ID>EmptyElseBlock:Game.kt$Game$if (f % 2 == 0) facingLeft = !facingLeft</ID>
+    <ID>EmptyElseBlock:MiniGamesTest.kt$MiniGamesTest$if (good.phase == good.period - 4) good.b()</ID>
+    <ID>LongMethod:Lcd.kt$fun DrawScope.drawLcd(game: Game)</ID>
+    <ID>LongMethod:Visitors.kt$Visitors$fun hour(save: Save, at: Long, night: Boolean, rng: Random): Pair&lt;Save, List&lt;String&gt;&gt;</ID>
+    <ID>LongParameterList:CharacterDraw.kt$( species: Species, stage: Stage, centerX: Float, ground: Float, unitPx: Float, unitsPerPixel: Float, faceLeft: Boolean = false, pose: Int = 0, layers: (ImageBitmap) -&gt; List&lt;ImageBitmap&gt; = { emptyList() }, )</ID>
+    <ID>LongParameterList:Critters.kt$(save: Save, f: Int, top: Int, ground: Int, u: Float, headX: Int, headY: Int, night: Boolean)</ID>
+    <ID>LongParameterList:GameDraw.kt$(c: Char, x: Int, y: Int, scale: Int, color: Long, u: Float)</ID>
+    <ID>LongParameterList:GameDraw.kt$(g: FruitCatch, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
+    <ID>LongParameterList:GameDraw.kt$(g: HigherLower, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
+    <ID>LongParameterList:GameDraw.kt$(g: MiniGame, pet: PetState, frame: Int, top: Int, ground: Int, u: Float)</ID>
+    <ID>LongParameterList:GameDraw.kt$(g: PlantHarvest, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
+    <ID>LongParameterList:GameDraw.kt$(g: TicTacToe, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
+    <ID>LongParameterList:GameDraw.kt$(x: Int, y: Int, w: Int, h: Int, c: Long, u: Float)</ID>
+    <ID>LongParameterList:GardenDraw.kt$(save: Save, now: Long, f: Int, ground: Int, px: Float, selected: Int?)</ID>
+    <ID>LongParameterList:Lcd.kt$(x: Int, y: Int, w: Int, h: Int, c: Color, px: Float)</ID>
+    <ID>LongParameterList:Lcd.kt$(x: Int, y: Int, w: Int, h: Int, c: Long, px: Float)</ID>
+    <ID>LongParameterList:SeasonDraw.kt$(season: Season, holiday: Holiday?, f: Int, evening: Boolean, eggFound: Boolean, px: Float)</ID>
+    <ID>LongParameterList:Theme.kt$Theme$(out: DoubleArray, at: Int, len: Int, midi: Int, duty: Double, vol: Double, rate: Int, vibrato: Boolean = false)</ID>
+    <ID>LongParameterList:Theme.kt$Theme$(out: DoubleArray, at: Int, len: Int, midi: Int, vol: Double, rate: Int)</ID>
+    <ID>LongParameterList:TitleScreen.kt$(x: Int, y: Int, w: Int, h: Int, c: Long, p: Float)</ID>
+    <ID>MemberNameEqualsClassName:Friends.kt$Friends$suspend fun friends(token: String): Reply&lt;List&lt;Friend&gt;&gt;</ID>
+    <ID>NestedBlockDepth:Chiptune.kt$Chiptune$private fun render(voices: List&lt;Voice&gt;, sequential: Boolean): ShortArray</ID>
+    <ID>NestedBlockDepth:Critters.kt$fun DrawScope.drawFrontCritters(save: Save, f: Int, top: Int, ground: Int, u: Float, headX: Int, headY: Int, night: Boolean)</ID>
+    <ID>NestedBlockDepth:Lcd.kt$fun DrawScope.drawLcd(game: Game)</ID>
+    <ID>NestedBlockDepth:PalScreen.kt$@Composable private fun PanelOverlay(game: Game)</ID>
+    <ID>NestedBlockDepth:SeasonDraw.kt$fun DrawScope.drawSeasonAndHoliday(season: Season, holiday: Holiday?, f: Int, evening: Boolean, eggFound: Boolean, px: Float)</ID>
+    <ID>NestedBlockDepth:Visitors.kt$Visitors$fun hour(save: Save, at: Long, night: Boolean, rng: Random): Pair&lt;Save, List&lt;String&gt;&gt;</ID>
+    <ID>NestedBlockDepth:WeatherDraw.kt$fun DrawScope.drawWeather(kind: WeatherKind, f: Int, top: Int, h: Int, px: Float)</ID>
+    <ID>TooGenericExceptionCaught:MainActivity.kt$MainActivity$e: Exception</ID>
+    <ID>TooManyFunctions:Game.kt$Game</ID>
+    <ID>TooManyFunctions:GameDraw.kt$org.jasonagibson.sproutpals.ui.GameDraw.kt</ID>
+    <ID>TooManyFunctions:Garden.kt$Garden</ID>
+    <ID>TooManyFunctions:MainActivity.kt$MainActivity : ComponentActivity</ID>
+    <ID>TooManyFunctions:Outfits.kt$org.jasonagibson.sproutpals.ui.Outfits.kt</ID>
+    <ID>TooManyFunctions:PalScreen.kt$org.jasonagibson.sproutpals.ui.PalScreen.kt</ID>
+    <ID>TooManyFunctions:PetEngine.kt$PetEngine</ID>
+    <ID>TooManyFunctions:Shop.kt$Shop</ID>
+    <ID>VariableNaming:Lcd.kt$val P = CharacterArt.Pose</ID>
+  </CurrentIssues>
+</SmellBaseline>

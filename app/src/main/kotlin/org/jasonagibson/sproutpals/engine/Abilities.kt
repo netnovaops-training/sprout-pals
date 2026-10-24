@@ -35,7 +35,6 @@ object Abilities {
         Species.KARTA -> "SOCIAL BUTTERFLY:\nTWO FRIENDS\nHANG OUT"
         Species.NATHAN -> "BALANCED:\nBORROWS FRIENDS'\nGOOD SIDES"
         Species.DJ, Species.MAUI -> "CAT'S GIFT:\nBRINGS A CREATURE\nHOME SOMETIMES"
-        else -> null
     }
 
     /** Kona's hearts last half as long again. */

@@ -1,0 +1,55 @@
+# Starts the deep scans after a burst of work, so they are not needed on every push (same as garden-for-all).
+#
+# Every day at 04:07 UTC (and by hand): count the commits of the last 3 days on main. THRESHOLD or more
+# start deep-scans.yml; fewer end here with a one-line summary. The weekly deep scan happens anyway.
+name: burst-gate
+
+on:
+  schedule:
+    - cron: '7 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: burst-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write # needed to start another workflow (gh workflow run)
+    env:
+      THRESHOLD: '5'
+      DAYS: '3'
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      REF_NAME: ${{ github.ref_name }}
+    steps:
+      - name: Count the commits of the last days
+        id: count
+        run: |
+          set -eu
+          since=$(date -u -d "$DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/$REPO/commits?sha=main&since=$since&per_page=100" --paginate \
+            --jq '.[] | select(.author.login != "github-actions[bot]") | .sha' | sort -u > shas.txt
+          n=$(wc -l < shas.txt)
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "$n commits in the last $DAYS days on main (threshold $THRESHOLD)"
+      - name: Start the deep scans, or say why not
+        env:
+          N: ${{ steps.count.outputs.n }}
+        run: |
+          set -eu
+          if [ "$N" -ge "$THRESHOLD" ]; then
+            gh workflow run deep-scans.yml --repo "$REPO" --ref "$REF_NAME"
+            msg="burst-gate: $N commits in the last $DAYS days (threshold $THRESHOLD): started deep-scans on $REF_NAME."
+          else
+            msg="burst-gate: $N commits in the last $DAYS days (threshold $THRESHOLD): nothing to start."
+          fi
+          echo "$msg" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=burst-gate::$msg"

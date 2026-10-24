@@ -1,0 +1,44 @@
+# Dependabot version updates, once a week (Monday 05:00 Pacific). Minor and patch updates of one folder
+# arrive together in a single pull request; a major update is its own pull request. The checks in
+# .github/workflows run on each pull request before it is merged.
+version: 2
+
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels: [dependencies, android]
+    groups:
+      gradle-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /server
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels: [dependencies, rust]
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels: [dependencies, github-actions]
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]

@@ -1,0 +1,48 @@
+# OpenSSF Scorecard: grades the repository's security habits (pinned actions, branch protection,
+# dependency updates, signed releases, ...) and publishes the score to the public Scorecard site.
+# Runs every Saturday 05:31 UTC and by hand. The result also goes to the Security tab, category "scorecard".
+name: scorecard
+
+on:
+  schedule:
+    - cron: '31 5 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    # Scorecard refuses to run anywhere but on the default branch, so a manual run on another branch is skipped, not failed.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      id-token: write # lets Scorecard publish its result with a signed identity (no secret involved)
+      actions: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: ${{ github.ref_name == github.event.repository.default_branch }}
+
+      - name: Upload to Code scanning
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: results.sarif
+          category: scorecard
+          wait-for-processing: true

@@ -1,0 +1,118 @@
+# rust-clippy: lints that catch common mistakes in the friends server (server/, Rust). Same setup as
+# garden-for-all: a summary on the run page and the full result as an artifact for 14 days; only the
+# groups that are rarely wrong (correctness, suspicious, perf) go to the Security tab.
+# Green when clippy only has warnings; red when clippy itself breaks (no compile, deny lint, no result).
+name: rust-clippy analyze
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/rust-clippy.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/rust-clippy.yml"
+  schedule:
+    - cron: '39 23 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-clippy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-clippy-analyze:
+    name: Run rust-clippy analyzing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # only to upload the Clippy findings to the Security tab
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain (rustup is already on the runner)
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+          rustc --version
+          cargo clippy --version
+
+      - name: Install the SARIF converter (pinned)
+        run: cargo install clippy-sarif@0.8.0 sarif-fmt@0.8.0 --locked
+
+      - name: Run rust-clippy
+        working-directory: server
+        run: |
+          rc=0
+          cargo clippy --all-features --message-format=json > clippy-results.json || rc=$?
+          echo "cargo clippy exit code: $rc"
+          echo "$rc" > clippy-exit-code.txt
+
+      - name: Summarise (warnings are fine; a broken or empty run is not)
+        working-directory: server
+        run: |
+          python3 - <<'PY'
+          import collections, json, os, sys
+          rc = int(open("clippy-exit-code.txt").read().strip())
+          levels, lints, finished = collections.Counter(), collections.Counter(), []
+          with open("clippy-results.json", encoding="utf-8") as f:
+              for line in f:
+                  try:
+                      m = json.loads(line)
+                  except ValueError:
+                      continue
+                  if m.get("reason") == "build-finished":
+                      finished.append(bool(m.get("success")))
+                  elif m.get("reason") == "compiler-message":
+                      msg = m["message"]
+                      if msg["level"] in ("warning", "error"):
+                          levels[msg["level"]] += 1
+                          lints[(msg.get("code") or {}).get("code") or "(no lint name)"] += 1
+          total = sum(levels.values())
+          out = ["### Clippy", "",
+                 f"- total: {total} (warnings: {levels['warning']}, errors: {levels['error']})",
+                 f"- cargo exit code: {rc}", "", "Ten most common lints:", ""]
+          out += [f"- `{name}`: {n}" for name, n in lints.most_common(10)] or ["- none"]
+          text = "\n".join(out) + "\n"
+          open("clippy-summary.md", "w", encoding="utf-8").write(text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(text)
+          print(f"::notice title=clippy::{total} findings ({levels['warning']} warnings, {levels['error']} errors)")
+          if rc != 0 or not finished or not all(finished):
+              print("::error title=clippy::clippy itself failed (exit code %d, build finished: %s)" % (rc, finished))
+              sys.exit(1)
+          PY
+
+      - name: Make a Security-tab report of only the findings that are rarely wrong
+        working-directory: server
+        run: |
+          cargo clippy --all-features --message-format=json -- -A clippy::all -W clippy::correctness -W clippy::suspicious -W clippy::perf > clippy-real.json || true
+          clippy-sarif < clippy-real.json > rust-clippy.sarif
+          sarif-fmt < rust-clippy.sarif || true
+
+      - name: Upload those to the Security tab (category rust-clippy)
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: server/rust-clippy.sarif
+          category: rust-clippy
+
+      - name: Keep the full result for 14 days
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: clippy-results
+          path: |
+            server/clippy-results.json
+            server/clippy-summary.md
+          retention-days: 14
+          if-no-files-found: warn

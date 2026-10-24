@@ -1,0 +1,64 @@
+# Runs the code: the game's unit tests (engine, garden, shop, achievements, abilities, weather...) and
+# the friends server's tests, on every push to main and every pull request. Red = a test failed or the
+# code does not compile. (Lint-type checks are in quick-checks, detekt and rust-clippy.)
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: app unit tests (Gradle)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Java 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Unit tests
+        # The Android SDK is already on the runner; Gradle fetches the platform it needs.
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: Summary
+        if: always()
+        run: |
+          set -u
+          shopt -s nullglob
+          files=(app/build/test-results/testDebugUnitTest/*.xml)
+          tests=0; failures=0
+          for f in "${files[@]}"; do
+            t=$(grep -o 'tests="[0-9]*"' "$f" | head -1 | grep -o '[0-9]*'); tests=$((tests + t))
+            x=$(grep -o 'failures="[0-9]*"' "$f" | head -1 | grep -o '[0-9]*'); failures=$((failures + x))
+          done
+          echo "### App unit tests: $tests tests in ${#files[@]} files, $failures failed" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  server:
+    name: server tests (cargo)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cargo test
+        working-directory: server
+        shell: bash   # -eo pipefail: a failing test still fails the step through the tee
+        run: |
+          rustup toolchain install stable --profile minimal
+          cargo test --locked 2>&1 | tee test.txt
+          grep -E '^test result' test.txt | sed 's/^/- /' | (echo "### Server tests"; cat) >> "$GITHUB_STEP_SUMMARY"
