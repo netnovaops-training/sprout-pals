@@ -19,7 +19,10 @@ $ipa = Join-Path $out 'sproutpals.ipa'
 
 "Downloading $tag from GitHub..."
 Invoke-WebRequest "https://github.com/$repo/releases/download/$tag/SproutPals.ipa" -OutFile $ipa -UseBasicParsing
-$expected = ((Invoke-WebRequest "https://github.com/$repo/releases/download/$tag/SproutPals.ipa.sha256" -UseBasicParsing).Content -split '\s+')[0]
+# GitHub serves the .sha256 file as binary (application/octet-stream), so read its bytes as text
+$shaBody = (Invoke-WebRequest "https://github.com/$repo/releases/download/$tag/SproutPals.ipa.sha256" -UseBasicParsing).Content
+if ($shaBody -is [byte[]]) { $shaBody = [Text.Encoding]::ASCII.GetString($shaBody) }
+$expected = ($shaBody.Trim() -split '\s+')[0]
 $actual = (Get-FileHash $ipa -Algorithm SHA256).Hash.ToLower()
 if ($expected.ToLower() -ne $actual) { throw "The download does not match the build's SHA-256 - stopped." }
 $size = (Get-Item $ipa).Length
