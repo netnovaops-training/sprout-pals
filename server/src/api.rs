@@ -356,8 +356,10 @@ mod tests {
         assert_eq!(g["visitors"][0]["code"], jason_code);
         assert_eq!(g["visitors"][0]["species"], "KONA");
         assert_eq!(g["visitors"][0]["outfit"], "sun_hat,flannel");
+        call(&app, "PUT", "/api/pet", Some(&jun), Some(json!({ "species": "DJ", "stage": "ADULT" }))).await;
         let (_, g) = call(&app, "GET", "/api/garden", Some(&jason), None).await;
         assert_eq!(g["away"]["host"], jun_code);
+        assert_eq!(g["away"]["species"], "DJ", "the host's pal comes along, to show them together");
         assert_eq!(g["visitors"].as_array().unwrap().len(), 0);
     }
 

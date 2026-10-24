@@ -75,6 +75,15 @@ data class PetState(
     val bonusLife: Int = 0,
 )
 
+/**
+ * A tag-along pal: grows up on its own clock from [since] and needs no care.
+ * After a full life it says goodbye and the spot is free again.
+ */
+@Serializable
+data class Buddy(val species: Species, val since: Long) {
+    fun stage(now: Long): Stage? = (now - since).let { age -> if (age >= Rules.LIFE_END) null else Rules.stageAt(age) }
+}
+
 /** What is left of a pet after it returns to the garden. */
 @Serializable
 data class MemoryCard(
@@ -124,6 +133,8 @@ data class Save(
     val awayUntil: Long = 0,
     /** Visits already welcomed ("code@until"), so each arrival is celebrated once. */
     val welcomed: List<String> = emptyList(),
+    /** A second pal that tags along with the first (see [Buddy]). */
+    val buddy: Buddy? = null,
     /** Achievements: how many times each thing was done, and the tiers earned ("key#tier"). */
     val counts: Map<String, Int> = emptyMap(),
     val achieved: List<String> = emptyList(),

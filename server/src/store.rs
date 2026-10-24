@@ -40,10 +40,14 @@ pub struct Visitor {
     pub until: i64,
 }
 
+/// Our pal's trip: whose garden, until when, and the host's own pal (to show them together).
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Away {
     pub host: String,
     pub until: i64,
+    pub species: String,
+    pub stage: String,
+    pub outfit: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -134,14 +138,14 @@ impl Store {
     /// The guest's visit that's still going, if any (one visit at a time).
     pub async fn current_visit(&self, guest: i64) -> sqlx::Result<Option<Away>> {
         let r = sqlx::query(
-            "SELECT p.code, v.until FROM visits v JOIN players p ON p.id = v.host
+            "SELECT p.code, v.until, p.species, p.stage, p.outfit FROM visits v JOIN players p ON p.id = v.host
              WHERE v.guest = ? AND v.until > ? ORDER BY v.until DESC LIMIT 1",
         )
         .bind(guest)
         .bind(now())
         .fetch_optional(&self.pool)
         .await?;
-        Ok(r.map(|r| Away { host: r.get(0), until: r.get(1) }))
+        Ok(r.map(|r| Away { host: r.get(0), until: r.get(1), species: r.get(2), stage: r.get(3), outfit: r.get(4) }))
     }
 
     pub async fn start_visit(&self, guest: i64, host: i64, hours: i64) -> sqlx::Result<i64> {

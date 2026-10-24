@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.jasonagibson.sproutpals.engine.Achievements
+import org.jasonagibson.sproutpals.engine.Buddy
+import org.jasonagibson.sproutpals.engine.Species
 import org.jasonagibson.sproutpals.engine.Garden
 import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.PlotState
@@ -128,6 +130,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         moving = petX != beforeX
 
         checkHome()
+        checkBuddy()
         runToasts(realNow)
         // the garden creatures' hour: perks, mischief, and the news of it
         val (visited, news) = Visitors.catchUp(save, now(), zone, rng)
@@ -633,6 +636,25 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         }
     }
 
+    // ---------- buddy ----------
+
+    /** Long hold on the hearts. */
+    fun heartHeld() {
+        if (pet.ended != null || pet.stage == Stage.EGG) return
+        if (save.buddy?.stage(now()) != null) { toastQueue += Toast("♥", "♥ ♥ ♥", "YOUR BUDDY SAYS HI!"); return }
+        val pool = Species.entries.filter { !it.rare && it != pet.species }
+        commit(save.copy(buddy = Buddy(pool[rng.nextInt(pool.size)], now())))
+        toastQueue += Toast("✨", "✨ ??? ✨", "A NEW BUDDY TAGS ALONG!", key = true)
+    }
+
+    /** A buddy at the end of its two weeks says goodbye. */
+    private fun checkBuddy() {
+        val b = save.buddy ?: return
+        if (b.stage(now()) != null) return
+        commit(save.copy(buddy = null))
+        if (panel == Panel.None) show("${b.species.title.uppercase()} THE BUDDY\nWAVED GOODBYE ♥", 3000)
+    }
+
     // ---------- visits ----------
 
     /** Friends' pals staying in our garden right now (from the server). */
@@ -642,6 +664,9 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     var onHeartOut: (code: String, message: String) -> Unit = { _, _ -> }
 
     val away: Boolean get() = save.awayUntil > System.currentTimeMillis()
+
+    /** While our pal is away: the host's own pal, shown beside ours (we're at their garden). */
+    var hostPal by mutableStateOf<org.jasonagibson.sproutpals.app.Friends.Visitor?>(null); private set
 
     fun openFriends() {
         if (mini != null || panel is Panel.Ended || panel is Panel.Update) return
@@ -670,6 +695,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** The server said yes: our pal is off to [host]'s garden until [untilMs]. */
     fun visitStarted(host: String, untilMs: Long) {
         commit(save.copy(awayHost = host, awayUntil = untilMs))
+        friendList.firstOrNull { it.code == host }?.let { hostPal = org.jasonagibson.sproutpals.app.Friends.Visitor(it.code, it.species, it.stage, "", untilMs / 1000) }
         count("visit")
         onSound(Chiptune.Sfx.ARRIVE)
         panel = Panel.None
@@ -681,6 +707,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     /** Fresh news from the server: who's visiting us, and whether our pal is out. */
     fun gardenNow(g: org.jasonagibson.sproutpals.app.Friends.GardenNow) {
         visitors = g.visitors
+        hostPal = g.away?.let { org.jasonagibson.sproutpals.app.Friends.Visitor(it.host, it.species, it.stage, it.outfit, it.until) }
         var s = save
         g.away?.let { a -> if (s.awayHost == null) s = s.copy(awayHost = a.host, awayUntil = a.until * 1000) }
         // each new arrival: a heart for our pal, and a hello

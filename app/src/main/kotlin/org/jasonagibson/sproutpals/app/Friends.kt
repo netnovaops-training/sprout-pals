@@ -22,7 +22,7 @@ class Friends {
     /** A friend's pal staying in our garden ([until] in server seconds). */
     @Serializable data class Visitor(val code: String, val species: String, val stage: String, val outfit: String = "", val until: Long)
     /** Our pal out at [host]'s garden until [until] (server seconds). */
-    @Serializable data class Away(val host: String, val until: Long)
+    @Serializable data class Away(val host: String, val until: Long, val species: String = "EGG", val stage: String = "EGG", val outfit: String = "")
     @Serializable data class GardenNow(val visitors: List<Visitor> = emptyList(), val away: Away? = null)
 
     sealed interface Reply<out T> {

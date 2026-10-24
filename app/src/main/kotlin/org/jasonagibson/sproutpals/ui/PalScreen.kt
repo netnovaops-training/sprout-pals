@@ -1,6 +1,9 @@
 package org.jasonagibson.sproutpals.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -95,9 +98,16 @@ fun PalScreen(
         // ----- top bar -----
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val hearts = if (game.pet.stage == Stage.EGG) 0 else game.pet.happy
-            repeat(Rules.MAX_HEARTS) { i ->
-                PixelIcon(if (i < hearts) PixelArt.HEART else PixelArt.HEART_EMPTY, PixelArt.PAL, 26.dp)
-                Spacer(Modifier.size(2.dp))
+            Row(Modifier.pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    // still pressed after 15 s: withTimeoutOrNull gives up waiting for the release
+                    if (withTimeoutOrNull(15_000) { tryAwaitRelease() } == null) game.heartHeld()
+                })
+            }) {
+                repeat(Rules.MAX_HEARTS) { i ->
+                    PixelIcon(if (i < hearts) PixelArt.HEART else PixelArt.HEART_EMPTY, PixelArt.PAL, 26.dp)
+                    Spacer(Modifier.size(2.dp))
+                }
             }
             Spacer(Modifier.size(6.dp))
             val food = if (game.pet.stage == Stage.EGG) 0 else game.pet.hunger
@@ -444,7 +454,7 @@ private fun GoingPlacesBanner(game: Game) {
 @Composable
 private fun AwayBanner(game: Game) {
     val left = ((game.save.awayUntil - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
-    val text = "🧳 VISITING ${game.save.awayHost}  ·  BACK IN ${if (left >= 60) "${left / 60}H ${left % 60}M" else "${left}M"}"
+    val text = "🧳 AT ${game.save.awayHost}'S GARDEN  ·  HOME IN ${if (left >= 60) "${left / 60}H ${left % 60}M" else "${left}M"}"
     Box(Modifier.fillMaxSize().padding(top = 44.dp), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFA8743F)).border(2.dp, Color(0xFF5C3A1A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
             BasicText(text, style = lcdText.copy(color = Color(0xFFFFF3D6), fontSize = 11.sp, lineHeight = 13.sp))

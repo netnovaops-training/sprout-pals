@@ -226,13 +226,13 @@ fun DrawScope.drawLcd(game: Game) {
     }
 
     // ----- friends' pals visiting: they stroll along the back of the lawn, dressed in their outfits -----
-    if (playing == null && !dark && !walking) drawVisitors(game.visitors, f, GROUND, px)
+    // (while our pal is out, we see it at the friend's garden: their pal plays beside ours)
+    val company = if (game.away) listOfNotNull(game.hostPal) else game.visitors
+    if (playing == null && !dark && !walking) drawVisitors(company, f, GROUND, px)
 
     // ----- the pet (or the sprout it left behind) -----
     if (playing != null) {
         Unit   // the game drew the pet
-    } else if (game.away) {
-        Unit   // out visiting a friend (the banner says where)
     } else if (pet.ended != null) {
         grid(Sprites.SPROUT.x2(), Sprites.SPROUT_PALETTE, 40, GROUND - 13, px)
     } else if (!dark) {
@@ -288,6 +288,18 @@ fun DrawScope.drawLcd(game: Game) {
             val bx = if (t < 16) 6 + t * 2 else 6 + (32 - t) * 2
             val by = GROUND - 4 - listOf(0, 4, 7, 9, 11, 12, 12, 11, 9, 7, 4, 0, 0, 2, 3, 2)[t % 16]
             block(bx, by, 4, 4, 0xFFE0344B, px); block(bx + 1, by + 1, 2, 2, 0xFFFF8A9A, px)
+        }
+
+        // a buddy, if there is one: trots along a step behind the pal, a little smaller
+        game.save.buddy?.let { b ->
+            val st = b.stage(game.now()) ?: return@let
+            if (pet.stage == Stage.EGG || pet.sleeping) return@let
+            val behind = if (game.facingLeft) 16f else -16f
+            val bpose = if (game.moving) CharacterArt.Pose.walk(b.species.kind, f / 2) else CharacterArt.Pose.STAND
+            character(
+                b.species, st, centerX = box.centerX + behind, ground = (GROUND + 1).toFloat(), unitPx = px,
+                unitsPerPixel = petScale(b.species, st) * 0.75f, faceLeft = game.facingLeft, pose = bpose,
+            )
         }
 
         // shop visitors that fly: in front of the pet, around its head
