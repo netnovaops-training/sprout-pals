@@ -10,7 +10,7 @@ class VisitorsTest {
     private val zone = ZoneId.of("America/New_York")
     private val hour = 60 * 60_000L
     private val t0 = 1_800_000_000_000L
-    private val pet = PetState(species = Species.DJ, bornAt = 0, lastTick = t0, hatchedAt = t0, stage = Stage.KID)   // no ability
+    private val pet = PetState(species = Species.KONA, bornAt = 0, lastTick = t0, hatchedAt = t0, stage = Stage.KID)   // her ability doesn't touch the garden
     private fun with(vararg ids: String) = Save(pet = pet, unlocked = ids.toList(), visitorsAt = t0)
 
     @Test fun `no creatures, nothing happens to the garden or the pal`() {

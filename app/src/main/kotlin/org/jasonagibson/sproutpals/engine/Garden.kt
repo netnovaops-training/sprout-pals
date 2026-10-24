@@ -112,8 +112,8 @@ object Garden {
 
     /** How long one watering keeps the soil wet: an hour more each for the ladybug and the rain barrel; half in a heat wave. */
     fun wetMinutes(save: Save, now: Long = 0L): Int {
-        val m = WET_MINUTES + (if (Shop.showing(save, "ladybug")) 60 else 0) + (if (Shop.showing(save, "rain_barrel")) 60 else 0) +
-            Abilities.extraWater(save.pet.species)
+        val m = WET_MINUTES + (if (Visitors.present(save, "ladybug", now)) 60 else 0) + (if (Shop.showing(save, "rain_barrel")) 60 else 0) +
+            Abilities.extraWater(save.pet.species, now / 3_600_000L)
         return when (Weather.now(save, now)) {
             WeatherKind.HEAT -> if (save.pet.species == Species.JASON) m else m / 2   // Jason troubleshoots the heat
             WeatherKind.SNOW -> 0   // frozen soil: the water just ices over

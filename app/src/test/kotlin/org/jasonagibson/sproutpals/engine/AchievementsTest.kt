@@ -38,6 +38,16 @@ class AchievementsTest {
         assertEquals(0, lost.bonusLife)
     }
 
+    @Test fun `secrets stay hidden until found, and count toward percent complete`() {
+        val s = Save(pet = pet)
+        assertTrue(Achievements.ALL.count { it.secret } >= 2)
+        assertEquals(0, Achievements.percent(s))
+        val (after, u) = Achievements.record(s, "secret_charm")
+        assertEquals(1, u.size)
+        assertTrue(u[0].feat.reveal.isNotBlank())
+        assertTrue(Achievements.percent(after) in 0..100)
+    }
+
     @Test fun `unknown keys are ignored and progress adds up`() {
         val s = Save(pet = pet)
         assertEquals(s, Achievements.record(s, "nonsense").first)

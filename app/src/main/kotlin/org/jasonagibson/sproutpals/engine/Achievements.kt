@@ -5,7 +5,11 @@ package org.jasonagibson.sproutpals.engine
  * every shop item you can own has a one-tier "got it" achievement. Each tier pays stars.
  * Counting lives in the save ([Save.counts]), so progress carries across every pet and life.
  */
-data class Feat(val key: String, val name: String, val icon: String, val tiers: List<Int> = TIERS) {
+/** [secret]: listed as "???" until the first tier is earned; then [name] and [reveal] show. */
+data class Feat(
+    val key: String, val name: String, val icon: String, val tiers: List<Int> = TIERS,
+    val secret: Boolean = false, val reveal: String = "",
+) {
     companion object { val TIERS = listOf(1, 5, 10) }
 }
 
@@ -48,10 +52,19 @@ object Achievements {
         Feat("full_life", "A FULL, HAPPY LIFE", "🌈"),
     )
 
+    /** Secrets: "???" in the list until found. */
+    private val SECRETS = listOf(
+        Feat("secret_buddy", "A BUDDY TAGS ALONG", "✨", secret = true, reveal = "HOLD THE HEARTS 15 SECONDS - ONCE A WEEK"),
+        Feat("secret_charm", "THE LUCKY CHARM", "🍀", listOf(1), secret = true, reveal = "THE ???? ITEM: RARE JASON NOW HATCHES 15% OF THE TIME"),
+    )
+
     /** One per shop item you can own (the last creature-page item stays a secret). */
     private val OWNING = Shop.ITEMS.filter { !it.repeatable }.map { Feat("own:${it.id}", "GOT THE ${it.name}", "🎁", listOf(1)) }
 
-    val ALL: List<Feat> = DOING + OWNING
+    val ALL: List<Feat> = DOING + OWNING + SECRETS
+
+    /** Share of all medals earned, 0-100. */
+    fun percent(save: Save): Int = progress(save).let { (got, of) -> if (of == 0) 0 else got * 100 / of }
 
     fun feat(key: String) = ALL.firstOrNull { it.key == key }
 

@@ -157,6 +157,7 @@ fun PalScreen(
                 Canvas(Modifier.fillMaxSize()) { drawLcd(game) }
                 PanelOverlay(game)
                 game.toast?.let { ToastBanner(it) }
+                game.caption?.let { CaptionStrip(it) }
             }
         }
 
@@ -404,7 +405,7 @@ private fun statusPage(game: Game, page: Int): String {
         4 -> "★ STARS ${game.save.points}\nSTEPS ${game.save.stepsTotal}\n\n" + weatherLine(game) + "\n\nWALK, CARE, PLAY\nAND GARDEN\nTO EARN MORE ★"
         Game.PAGE_TROPHIES -> {
             val (got, of) = Achievements.progress(game.save)
-            "🏆 TROPHIES\n\n$got OF $of\nMEDALS EARNED\n\nB: OPEN THE LIST"
+            "🏆 TROPHIES\n\n${Achievements.percent(game.save)}% COMPLETE\n$got OF $of MEDALS\n\nB: OPEN THE LIST"
         }
         else -> "📖 MEMORY BOOK\n\n${game.save.memories.size} PAL${if (game.save.memories.size == 1) "" else "S"}\nREMEMBERED\n\nB: OPEN THE BOOK"
     }
@@ -453,6 +454,16 @@ private fun GoingPlacesBanner(game: Game) {
     Box(Modifier.fillMaxSize().padding(top = 44.dp, start = 10.dp), contentAlignment = Alignment.TopStart) {
         Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFA8743F)).border(2.dp, Color(0xFF5C3A1A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
             BasicText(text, style = lcdText.copy(color = Color(0xFFFFF3D6), fontSize = 11.sp, lineHeight = 13.sp))
+        }
+    }
+}
+
+/** A caption along the bottom of the garden (e.g. the newly hatched baby's name). */
+@Composable
+private fun CaptionStrip(text: String) {
+    Box(Modifier.fillMaxSize().padding(bottom = 54.dp), contentAlignment = Alignment.BottomCenter) {
+        Box(Modifier.clip(RoundedCornerShape(6.dp)).background(INK.copy(alpha = 0.88f)).padding(horizontal = 12.dp, vertical = 5.dp)) {
+            BasicText(text, style = lcdText.copy(color = Color(0xFFFFD84A), fontSize = 14.sp, lineHeight = 17.sp))
         }
     }
 }

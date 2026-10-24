@@ -142,8 +142,12 @@ data class Save(
     val welcomed: List<String> = emptyList(),
     /** The year the spring egg was last found (one find a year). */
     val eggYear: Int = 0,
-    /** A second pal that tags along with the first (see [Buddy]). */
+    /** A second pal that tags along with the first (see [Buddy]), and when the last one came. */
     val buddy: Buddy? = null,
+    val buddyMadeAt: Long = 0,
+    /** A creature a cat (DJ, Maui) brought along for a few hours: perks only, not owned. */
+    val guestCreature: String? = null,
+    val guestUntil: Long = 0,
     /** Achievements: how many times each thing was done, and the tiers earned ("key#tier"). */
     val counts: Map<String, Int> = emptyMap(),
     val achieved: List<String> = emptyList(),

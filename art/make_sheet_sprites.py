@@ -198,8 +198,8 @@ def grow_old(rgba, name):
             hair = ((hh <= 10) | (hh >= 170)) & (s > 110) & (v > 60)             # red hair
         elif name == "karta":
             # reddish-brown hair, close in colour to the maroon shirt: look only at the top third
-            top[int(v.shape[0] * 0.36):] = False
-            hair = ((hh <= 22) | (hh >= 160)) & (s > 50) & (v > 30) & (v < 150)
+            top[int(v.shape[0] * 0.38):] = False
+            hair = ((hh <= 24) | (hh >= 150)) & (s > 35) & (v > 20) & (v < 175)
         elif name == "nathan":
             hair = (hh >= 5) & (hh <= 25) & (s > 45) & (v > 60) & (v < 190)      # light brown hair and beard
         else:
@@ -210,8 +210,13 @@ def grow_old(rgba, name):
         n, labels, stats, _ = cv2.connectedComponentsWithStats(hair.astype(np.uint8), 8)
         if n > 1:
             order = 1 + np.argsort(-stats[1:, cv2.CC_STAT_AREA])
-            keep_n = 4 if name in ("jason", "nathan") else 1        # bearded: beard and sideburns too
+            # bearded: beard and sideburns too; Karta's spiky hair breaks into several patches
+            keep_n = 4 if name in ("jason", "nathan") else 6 if name == "karta" else 1
             keep = [i for i in order[:keep_n] if stats[i, cv2.CC_STAT_AREA] > 0.03 * stats[order[0], cv2.CC_STAT_AREA]]
+            if name == "karta":
+                # hair patches start near the top of the head; a lower patch is the mouth (arms-up pose)
+                hair_top = min(stats[i, cv2.CC_STAT_TOP] for i in keep)
+                keep = [i for i in keep if stats[i, cv2.CC_STAT_TOP] < hair_top + 0.14 * v.shape[0]]
             hair = np.isin(labels, keep)
         grey = np.clip(v * 0.9 + 95, 0, 235)
         out[hair, 0] = grey[hair]; out[hair, 1] = grey[hair]; out[hair, 2] = (grey[hair] * 1.02).clip(0, 255)

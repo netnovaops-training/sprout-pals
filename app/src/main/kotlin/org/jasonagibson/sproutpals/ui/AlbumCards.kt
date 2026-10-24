@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,19 +82,33 @@ fun TrophyCard(game: Game, p: Panel.Trophies) {
     val rows = Achievements.rows(game.save)
     val (got, of) = Achievements.progress(game.save)
     Card {
+        val pct = Achievements.percent(game.save)
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText("🏆 TROPHIES", style = mono.copy(fontSize = 15.sp))
             Spacer(Modifier.weight(1f))
-            BasicText("$got / $of", style = mono.copy(fontSize = 13.sp))
+            BasicText("$pct% COMPLETE", style = mono.copy(fontSize = 13.sp))
         }
+        // progress bar: done vs still to do
+        Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(0x22000000)).border(1.5.dp, INK, RoundedCornerShape(5.dp))) {
+            Box(Modifier.fillMaxWidth(pct / 100f).height(10.dp).background(Color(0xFF8FD46A)))
+        }
+        BasicText("$got DONE  ·  ${of - got} TO GO", style = mono.copy(fontSize = 10.sp, color = INK.copy(alpha = 0.7f)))
         rows.drop(p.top).take(Game.TROPHY_ROWS).forEach { (f, n, earned) ->
             val next = f.tiers.firstOrNull { it > n }
+            val hidden = f.secret && earned == 0
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) { BasicText(f.icon, style = mono.copy(fontSize = 16.sp)) }
+                Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) { BasicText(if (hidden) "❔" else f.icon, style = mono.copy(fontSize = 16.sp)) }
                 Column(Modifier.weight(1f)) {
-                    BasicText(f.name, style = mono.copy(fontSize = 11.sp, color = if (earned > 0) INK else INK.copy(alpha = 0.55f)))
+                    BasicText(if (hidden) "???" else f.name, style = mono.copy(fontSize = 11.sp, color = if (earned > 0) INK else INK.copy(alpha = 0.55f)))
                     BasicText(
-                        if (next == null) "DONE!" else if (f.tiers.size == 1) "NOT YET" else "$n / $next",
+                        when {
+                            hidden -> "???"
+                            f.secret && next != null && f.tiers.size > 1 -> "${f.reveal}  ·  $n / $next"
+                            f.secret -> f.reveal
+                            next == null -> "DONE!"
+                            f.tiers.size == 1 -> "NOT YET"
+                            else -> "$n / $next"
+                        },
                         style = mono.copy(fontSize = 9.sp, color = INK.copy(alpha = 0.6f)),
                     )
                 }

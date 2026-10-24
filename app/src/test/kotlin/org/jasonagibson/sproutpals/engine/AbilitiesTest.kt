@@ -32,6 +32,33 @@ class AbilitiesTest {
         assertEquals(Garden.WET_MINUTES + 60, Garden.wetMinutes(Save(pet = pet)))
     }
 
+    @Test fun `cats bring a guest creature for 4 hours that isn't owned and never misbehaves`() {
+        val t0 = 1_800_000_000_000L
+        val hour = 3_600_000L
+        val dj = PetState(species = Species.DJ, bornAt = 0, lastTick = t0, hatchedAt = t0, stage = Stage.ADULT)
+        var s = Save(pet = dj, visitorsAt = t0, weatherDay = Long.MAX_VALUE)
+        var guestSeen = false
+        for (h in 1..200) {
+            s = Visitors.catchUp(s, t0 + h * hour, java.time.ZoneId.of("UTC"), Random(h)).first
+            s.guestCreature?.let { g ->
+                guestSeen = true
+                assertTrue(Visitors.present(s, g, t0 + h * hour))
+                assertFalse(Shop.owns(s, g))
+                assertTrue(s.guestUntil - (t0 + h * hour) <= Abilities.GUEST_HOURS * hour)
+            }
+        }
+        assertTrue(guestSeen)
+        assertTrue(s.unlocked.isEmpty())
+    }
+
+    @Test fun `Nathan borrows Jun's good side while Jun is over`() {
+        val junHour = (0L until 100).first { Species.JUN in Abilities.company(Species.NATHAN, it) }
+        val quietHour = (0L until 100).first { Abilities.company(Species.NATHAN, it).isEmpty() }
+        assertEquals(60, Abilities.extraWater(Species.NATHAN, junHour))
+        assertEquals(0, Abilities.extraWater(Species.NATHAN, quietHour))
+        assertTrue(Abilities.canVisit(Species.NATHAN))
+    }
+
     @Test fun `Karta always has two friends over, Nathan sometimes one, never themselves`() {
         for (h in 0L until 48) {
             val k = Abilities.company(Species.KARTA, h)

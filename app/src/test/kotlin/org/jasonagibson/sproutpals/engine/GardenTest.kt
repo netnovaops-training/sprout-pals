@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GardenTest {
-    private val pet = PetState(species = Species.DJ, bornAt = 0, lastTick = 0)   // no ability: plain garden rules
+    private val pet = PetState(species = Species.KONA, bornAt = 0, lastTick = 0)   // her ability doesn't touch the garden
     private val min = 60_000L
     private val t0 = 1_000_000_000L
 

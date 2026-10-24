@@ -49,6 +49,9 @@ object Visitors {
         "scarecrow" to listOf(Perk("🌾", "Birds and deer raid crops half as often")),
     )
 
+    /** Is creature [id] in the garden at [now]: switched on, or brought along by a cat for a while? */
+    fun present(save: Save, id: String, now: Long) = Shop.showing(save, id) || (save.guestCreature == id && now < save.guestUntil)
+
     /** Rolls every whole hour since the last time; returns the new save and what happened. */
     fun catchUp(save: Save, now: Long, zone: ZoneId, rng: Random): Pair<Save, List<String>> {
         if (save.visitorsAt == 0L) return save.copy(visitorsAt = now) to emptyList()
@@ -88,12 +91,26 @@ object Visitors {
         if (fresh.isNotEmpty()) s = s.copy(outUntil = s.outUntil + fresh.associateWith { at + Shop.OUT_HOURS * HOUR })
         fun chance(pct: Int) = rng.nextInt(100) < pct
         fun has(id: String) = Shop.showing(s, id)
+        val hour = at / HOUR
+
+        // DJ and Maui now and then bring a creature home for a few hours (not owned, perks only)
+        if (s.guestCreature != null && at >= s.guestUntil) s = s.copy(guestCreature = null, guestUntil = 0)
+        if (Abilities.bringsGuests(s.pet.species) && s.pet.ended == null && s.pet.hatchedAt != null && s.guestCreature == null && chance(Abilities.GUEST_CHANCE)) {
+            val pool = Shop.ITEMS.filter { it.tab == ShopTab.CREATURES && !it.repeatable && !Shop.showing(s, it.id) }
+            if (pool.isNotEmpty()) {
+                val c = pool[rng.nextInt(pool.size)]
+                s = s.copy(guestCreature = c.id, guestUntil = at + Abilities.GUEST_HOURS * HOUR)
+                news += "${s.pet.species.title.uppercase()} BROUGHT HOME\nA ${c.name}! (${Abilities.GUEST_HOURS}H)"
+            }
+        }
+        val guest = s.guestCreature?.takeIf { at < s.guestUntil && it !in out }
 
         // decor that does something on its own
         if (has("well") && chance(4)) { s = s.copy(points = s.points + 3); news += "A WISH CAME TRUE\nAT THE WELL! +3 ★" }
 
         // in a storm the creatures hide: no perks, no mischief
-        if (out.isEmpty() || Weather.now(s, at) == WeatherKind.STORM) return s to news
+        val here = out + listOfNotNull(guest)
+        if (here.isEmpty() || Weather.now(s, at) == WeatherKind.STORM) return s to news
         val alive = s.pet.ended == null && s.pet.hatchedAt != null
         fun pet(f: (PetState) -> PetState) { if (alive) s = s.copy(pet = f(s.pet)) }
         val awake = !night
@@ -103,13 +120,16 @@ object Visitors {
         val stings = !has("pond")                          // pond: no more stings
         val lateNights = !has("lantern")                   // lantern: fireflies can't keep the pal up
         // the pal's own ability may stop the mischief (Jason, Jun, the dogs - see Abilities)
-        fun ok(): Boolean = Abilities.blocks(s.pet.species, fromCreature = true, rng)?.let { news += it; false } ?: true
-        fun bad(pct: Int) = chance(pct) && ok()
+        // a cat's guest brings only good things: its catches never happen
+        var current = ""
+        fun ok(): Boolean = current != guest &&
+            (Abilities.blocks(s.pet.species, fromCreature = true, rng, hour)?.let { news += it; false } ?: true)
+        fun bad(pct: Int) = current != guest && chance(pct) && ok()
 
         // a little longer life for every creature out
-        if (alive) pet { it.copy(bonusLife = it.bonusLife + out.sumOf { id -> if (id == "deer") DEER_LIFE else LIFE_MINUTES }) }
+        if (alive) pet { it.copy(bonusLife = it.bonusLife + here.sumOf { id -> if (id == "deer") DEER_LIFE else LIFE_MINUTES }) }
 
-        for (id in out) when (id) {
+        for (id in here) when (id.also { current = it }) {
             "ladybug" -> if (s.pantry.isNotEmpty() && bad(2)) {
                 s = s.copy(pantry = s.pantry.drop(1)); news += "A LADYBUG GOT INTO\nTHE PANTRY!"
             }

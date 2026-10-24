@@ -35,7 +35,7 @@ import kotlin.random.Random
 enum class MenuItem { STATUS, FEED, LIGHT, PLAY, MEDICINE, CLEAN, GARDEN }
 
 /** Short animation shown after a care action. */
-enum class Effect { NONE, MEAL, SNACK, PILL, CLEAN, HAPPY, NO, SHAKE }
+enum class Effect { NONE, MEAL, SNACK, PILL, CLEAN, HAPPY, NO, SHAKE, HATCH }
 
 /** What the pet is doing when nobody's pressing buttons. WALK = walking along with you. */
 enum class Move { WANDER, HOP, DANCE, SPIN, RUN, REST, GARDEN, BALL, WALK }
@@ -96,6 +96,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     private var lastReading = -1L
 
     private var effectUntil = 0L
+    /** The frame the current effect started on (for effects that play out over time). */
+    var effectFrame = 0; private set
+    /** A line shown under the garden for a few seconds (e.g. naming a newly hatched baby). */
+    var caption by mutableStateOf<String?>(null); private set
+    private var captionUntil = 0L
     private var messageUntil = 0L
     private val zone: ZoneId get() = ZoneId.systemDefault()
     private val rng = Random.Default
@@ -119,6 +124,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     fun tick(realNow: Long) {
         frame++
         if (realNow > effectUntil) effect = Effect.NONE
+        if (caption != null && realNow > captionUntil) caption = null
         if (panel is Panel.Message && realNow > messageUntil) panel = Panel.None
 
         mini?.let { g ->
@@ -246,7 +252,14 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         if (after.stage == Stage.BABY) {
             val name = after.species.title.uppercase()
             onSound(Chiptune.Sfx.HATCH)
-            show(if (after.species.rare) "★ RARE! ★\nIT'S $name!" else "IT HATCHED!\nIT'S $name!", 4000)
+            // the hatching scene: shell halves fly off, the baby pops up and cheers; caption underneath
+            effect = Effect.HATCH
+            effectFrame = frame
+            effectUntil = System.currentTimeMillis() + 3_500
+            petX = 0
+            caption = (if (after.species.rare) "✨ A RARE BABY $name! ✨" else "🐣 WELCOME, BABY $name!") +
+                if (after.generation > 1) "  (GENERATION ${after.generation})" else ""
+            captionUntil = System.currentTimeMillis() + 6_000
             count("hatch")
             if (after.species.rare) keyItem("✨", "A RARE $name HATCHED!")
         }
@@ -473,6 +486,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             ShopResult.BOUGHT -> {
                 onSound(Chiptune.Sfx.ARRIVE)
                 if (!item.repeatable) { count("buy"); count("own:${item.id}") }
+                if (item.repeatable && next.mysteryCount >= Shop.MAX_REPEAT) count("secret_charm")
                 if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN YOUR GARDEN"
             }
             ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
@@ -627,7 +641,11 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     fun count(key: String, by: Int = 1) {
         val (s, unlocks) = Achievements.record(save, key, by)
         if (s != save) commit(s)
-        unlocks.forEach { u -> toastQueue += Toast(u.feat.icon, "${u.medal} ACHIEVEMENT!", "${u.feat.name}${if (u.feat.tiers.size > 1) " ×${u.feat.tiers[u.tier]}" else ""}  +${u.stars} ★") }
+        unlocks.forEach { u ->
+            val f = u.feat
+            toastQueue += if (f.secret && u.tier == 0) Toast(f.icon, "❓ SECRET FOUND!", "${f.name}: ${f.reveal}  +${u.stars} ★", key = true)
+            else Toast(f.icon, "${u.medal} ACHIEVEMENT!", "${f.name}${if (f.tiers.size > 1) " ×${f.tiers[u.tier]}" else ""}  +${u.stars} ★")
+        }
     }
 
     /** A key item picked up: the bigger fanfare. */
@@ -660,9 +678,16 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     fun heartHeld() {
         if (pet.ended != null || pet.stage == Stage.EGG) return
         if (save.buddy?.stage(now()) != null) { toastQueue += Toast("♥", "♥ ♥ ♥", "YOUR BUDDY SAYS HI!"); return }
+        // once a week
+        val wait = save.buddyMadeAt + BUDDY_EVERY - now()
+        if (save.buddyMadeAt > 0 && wait > 0) {
+            toastQueue += Toast("♥", "♥ ♥ ♥", "TRY AGAIN IN ${wait / Rules.DAY + 1} DAY${if (wait / Rules.DAY + 1 == 1L) "" else "S"}")
+            return
+        }
         val pool = Species.entries.filter { !it.rare && it != pet.species }
-        commit(save.copy(buddy = Buddy(pool[rng.nextInt(pool.size)], now())))
+        commit(save.copy(buddy = Buddy(pool[rng.nextInt(pool.size)], now()), buddyMadeAt = now()))
         toastQueue += Toast("✨", "✨ ??? ✨", "A NEW BUDDY TAGS ALONG!", key = true)
+        count("secret_buddy")
     }
 
     /** A buddy at the end of its two weeks says goodbye. */
@@ -773,6 +798,8 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         const val PAGE_TROPHIES = 5
         const val PAGE_BOOK = 6
         const val TROPHY_ROWS = 6
+        /** How often a new buddy can come along. */
+        const val BUDDY_EVERY = 7 * Rules.DAY
         /** Stars for coming home from a visit. */
         const val VISIT_STARS = 3
         /** Screen pixels left/right of home the pet may roam (sprites are 32 wide on a 96-wide screen). */

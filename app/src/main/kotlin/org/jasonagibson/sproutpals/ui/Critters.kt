@@ -78,6 +78,9 @@ private fun pingPong(f: Int, a: Int, b: Int, speed: Float): Pair<Int, Boolean> {
 private fun DrawScope.sprite(g: Grid, pal: Map<Char, Long>, x: Int, y: Int, u: Float, flip: Boolean = false) =
     shaded(g, pal, x, y, u, flip)
 
+/** Out in the garden: switched on in the shop, or a guest a cat brought home. */
+private fun here(save: Save, id: String) = org.jasonagibson.sproutpals.engine.Visitors.present(save, id, System.currentTimeMillis())
+
 /** A shop item's picture, centred in a 24x24-unit box and gently animated. */
 fun DrawScope.drawItemPreview(id: String, f: Int, u: Float) {
     val (frames, pal) = when (id) {
@@ -109,25 +112,25 @@ fun DrawScope.drawItemPreview(id: String, f: Int, u: Float) {
 
 /** Ground and fence visitors: drawn before the pet so it stands in front of them. */
 fun DrawScope.drawBackCritters(save: Save, f: Int, top: Int, ground: Int, u: Float) {
-    if (Shop.showing(save, "deer")) {
+    if (here(save, "deer")) {
         val grazing = (f / 40) % 3 == 0
         sprite(Art.DEER[if (grazing) 1 else 0], Art.DEER_PAL, 76, top + 31, u, flip = true)
     }
-    if (Shop.showing(save, "squirrel")) {
+    if (here(save, "squirrel")) {
         val (x, back) = pingPong(f, 2, 70, 0.9f)
         sprite(Art.SQUIRREL[(f / 2) % 2], Art.SQUIRREL_PAL, x, top + 33, u, flip = back)
     }
-    if (Shop.showing(save, "bluebird")) {
+    if (here(save, "bluebird")) {
         val hop = (f / 24) % 4
         val pecking = f % 24 < 6
         sprite(Art.BLUEBIRD[if (pecking) 1 else 0], Art.BLUEBIRD_PAL, 6 + hop * 4, top + 35, u)
     }
-    if (Shop.showing(save, "bunny")) {
+    if (here(save, "bunny")) {
         val (x, back) = pingPong(f, 0, 82, 0.5f)
         val hopping = (f / 4) % 2 == 0
         sprite(Art.BUNNY[if (hopping) 1 else 0], Art.BUNNY_PAL, x, ground - 6 - (if (hopping) 2 else 0), u, flip = back)
     }
-    if (Shop.showing(save, "ladybug")) {
+    if (here(save, "ladybug")) {
         val x = 92 - (f / 3) % 100
         sprite(Art.LADYBUG[(f / 2) % 2], Art.LADYBUG_PAL, x, ground + 1, u, flip = true)
     }
@@ -135,23 +138,23 @@ fun DrawScope.drawBackCritters(save: Save, f: Int, top: Int, ground: Int, u: Flo
 
 /** Flyers: drawn after the pet, so they flit in front of it. [headX]/[headY] = top-centre of the pet. */
 fun DrawScope.drawFrontCritters(save: Save, f: Int, top: Int, ground: Int, u: Float, headX: Int, headY: Int, night: Boolean) {
-    if (Shop.showing(save, "butterfly")) {
+    if (here(save, "butterfly")) {
         val x = headX + (16 * sin(f * 0.11)).toInt() - 3
         val y = (headY - 6 + (5 * sin(f * 0.23)).toInt()).coerceAtLeast(top + 2)
         sprite(Art.BUTTERFLY[(f / 2) % 2], Art.BUTTERFLY_PAL, x, y, u)
     }
-    if (Shop.showing(save, "hummingbird")) {
+    if (here(save, "hummingbird")) {
         val x = headX + 12 + (2 * sin(f * 0.4)).toInt()
         val y = (headY + 2 + (2 * sin(f * 0.3)).toInt()).coerceAtLeast(top + 2)
         sprite(Art.HUMMINGBIRD[f % 2], Art.HUMMINGBIRD_PAL, x, y, u, flip = true)
     }
-    if (Shop.showing(save, "bee")) {
+    if (here(save, "bee")) {
         // zips between the flowers along the bottom of the lawn
         val x = (f % 120) - 12
         val y = ground - 12 + (3 * sin(f * 0.6)).toInt()
         sprite(Art.BEE[f % 2], Art.BEE_PAL, x, y, u)
     }
-    if (Shop.showing(save, "fireflies") && night) {
+    if (here(save, "fireflies") && night) {
         for (i in 0 until 7) {
             val x = (i * 29 + (6 * sin((f + i * 17) * 0.05)).toInt()).mod(96)
             val y = top + 18 + (i * 11) % 34 + (3 * sin((f + i * 9) * 0.07)).toInt()

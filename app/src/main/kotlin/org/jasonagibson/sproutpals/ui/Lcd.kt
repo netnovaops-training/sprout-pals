@@ -68,6 +68,7 @@ private fun poseFor(game: Game, lift: Int): Int {
     return when {
         pet.sleeping -> P.STAND
         pet.sick && game.effect != Effect.PILL -> P.SICK
+        game.effect == Effect.HATCH -> if (lift >= 3) P.JUMP else if (lift > 0) P.LAND else P.cheer(k)
         game.effect == Effect.HAPPY -> if (lift >= 4) P.JUMP else P.cheer(k)
         game.effect == Effect.NO -> if (k == Kind.CAT) 3 else P.STAND
         game.effect != Effect.NONE -> P.STAND                     // eating, medicine, cleaning
@@ -278,6 +279,11 @@ fun DrawScope.drawLcd(game: Game) {
             box = CharBox(x.toFloat(), y.toFloat(), 32f, egg.size.toFloat())
         } else {
             when {
+                // hatching: one big pop out of the shell, then little cheering hops
+                game.effect == Effect.HATCH -> {
+                    val t = f - game.effectFrame
+                    lift = if (t < 10) listOf(0, 4, 8, 10, 11, 10, 8, 5, 2, 0)[t] else listOf(0, 1, 2, 1)[t % 4]
+                }
                 game.effect == Effect.HAPPY -> lift = listOf(0, 3, 6, 7, 6, 3, 0, 0)[f % 8]
                 game.effect == Effect.NO -> x += listOf(-2, -1, 0, 1, 2, 1, 0, -1)[f % 8]
                 pet.sleeping -> Unit
@@ -320,6 +326,24 @@ fun DrawScope.drawLcd(game: Game) {
                 b.species, st, centerX = box.centerX + behind, ground = (GROUND + 1).toFloat(), unitPx = px,
                 unitsPerPixel = petScale(b.species, st) * 0.75f, faceLeft = game.facingLeft, pose = bpose,
             )
+        }
+
+        // hatching: the two shell halves fly apart and drop, with sparkles around the baby
+        if (game.effect == Effect.HATCH) {
+            val t = f - game.effectFrame
+            val egg = Sprites.EGG
+            val half = egg.size / 2
+            val cx = box.centerX.toInt() - 16
+            val fall = (t * t) / 6
+            if (t < 22) {
+                shaded(egg.take(half), Sprites.EGG_PALETTE, cx - t * 2, GROUND - egg.size - 2 - (if (t < 6) t else 6) + fall, px)
+                shaded(egg.drop(half), Sprites.EGG_PALETTE, cx + t * 2, GROUND - half + 1 + fall / 3, px)
+            }
+            for (i in 0 until 6) {
+                val a = i * Math.PI / 3 + t * 0.15
+                val r = 8 + (t % 12)
+                if ((t + i) % 3 != 0) block(box.centerX.toInt() + (r * kotlin.math.cos(a)).toInt(), box.headTop.toInt() + 6 + (r * kotlin.math.sin(a) * 0.6).toInt(), 1, 1, 0xFFFFF6A0, px)
+            }
         }
 
         // a thought bubble now and then: 3 seconds showing, 5 hidden (not while sick: the bubble is taken)
