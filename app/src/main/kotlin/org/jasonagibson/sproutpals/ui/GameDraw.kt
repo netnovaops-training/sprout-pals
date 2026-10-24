@@ -65,15 +65,15 @@ private fun DrawScope.plantHarvest(g: PlantHarvest, pet: PetState, f: Int, top: 
             gr >= 45 -> px(cx - 1, bedY - stem - 2, 3, 2, 0xFF8FD46AL, u)                       // a green bud
         }
         // ripeness meter under each plant: green fill, gold band = perfect
-        val meterY = bedY + 5
-        px(cx - 6, meterY, 13, 2, 0xFF2B2B2BL, u)
-        px(cx - 6 + 13 * 78 / 110, meterY, 2, 2, 0xFFFFD84AL, u)
-        px(cx - 6, meterY, (13 * gr.coerceAtMost(110) / 110).coerceAtLeast(1), 1, if (rotten) 0xFF8A5A2BL else 0xFF5BC236L, u)
+        val meterY = bedY + 4
+        px(cx - 7, meterY - 1, 15, 5, 0xFF1E2A1CL, u)                                              // dark frame
+        px(cx - 6, meterY, 13 * gr.coerceAtMost(110) / 110, 3, if (rotten) 0xFF8A5A2BL else 0xFF8FD46AL, u)
+        px(cx - 6 + 13 * 78 / 110, meterY - 1, 2, 5, 0xFFFFD84AL, u)                               // the gold mark
     }
-    // the pal stands by the chosen plant, with an arrow over it
+    // an arrow over the chosen plant; the pal stands just beside it (not in front of it), a little smaller
     val cx = plotCenter(g.cursor)
     if (f % 4 < 3) { px(cx - 1, top + 6, 3, 1, 0xFFFFFFFFL, u); px(cx, top + 7, 1, 1, 0xFFFFFFFFL, u) }
-    pal(pet, cx.toFloat(), ground.toFloat() + 1, u, if (g.callout == "PERFECT!") CharacterArt.Pose.clap(pet.species.kind, f) else CharacterArt.Pose.STAND, 22f)
+    pal(pet, (cx + 8).toFloat(), ground.toFloat() + 1, u, if (g.callout == "PERFECT!") CharacterArt.Pose.clap(pet.species.kind, f) else CharacterArt.Pose.STAND, 17f, faceLeft = true)
 }
 
 // ---------- Fruit Catch ----------
