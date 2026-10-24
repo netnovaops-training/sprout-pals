@@ -1,0 +1,64 @@
+# XcodeGen spec for the iPhone app. The .xcodeproj is GENERATED from this file (on GitHub's Mac runner,
+# or any Mac: `brew install xcodegen && xcodegen generate`) and is not committed - the same approach as
+# Cut The Fluff, because this project is written on Windows, where an .xcodeproj can't be opened or checked.
+#
+# What the app is made of:
+#   Sources/App.swift      a few lines of Swift that show the shared game
+#   ../shared              the game itself (Kotlin Multiplatform); the "Build Kotlin" step compiles it
+#                          into Shared.framework before Swift is compiled
+#   ../app/.../drawable-nodpi/char_*.png   the character pictures - the very same files as Android
+name: SproutPals
+options:
+  bundleIdPrefix: org.jasonagibson
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.12"          # follows the Android versionName
+    CURRENT_PROJECT_VERSION: "12"      # follows the Android versionCode
+    # the Gradle step writes outside the sandbox (shared/build), so Xcode's script sandbox must be off
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  SproutPals:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources/Assets.xcassets
+      - path: ../app/src/main/res/drawable-nodpi
+        includes:
+          - "char_*.png"
+        buildPhase: resources
+    preBuildScripts:
+      - name: Build Kotlin (the shared game)
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.jasonagibson.sproutpals
+        PRODUCT_NAME: SproutPals
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"    # iPhone
+        FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: ["$(inherited)", "-framework", "Shared"]
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Sprout Pals
+        CFBundleName: Sprout Pals
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Compose draws at the screen's full refresh rate only with this set
+        CADisableMinimumFrameDurationOnPhone: true
+        # asked the first time steps or shaking are used (the motion chip: pedometer + accelerometer)
+        NSMotionUsageDescription: Sprout Pals counts your steps to earn stars and walk to garden shops, and feels a shake to hatch the egg.
+        ITSAppUsesNonExemptEncryption: false

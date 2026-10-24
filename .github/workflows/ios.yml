@@ -1,0 +1,109 @@
+# Builds the iPhone app (unsigned .ipa) on GitHub's Mac runner - the only place it can be built, since
+# this project is written on Windows (same approach as Cut The Fluff).
+#
+# Unsigned on purpose: it is installed by sideloading (SideStore / AltStore / Sideloadly), where the
+# free Apple ID on the phone signs it at install time - a 7-day signature and a 3-app limit, no $99/yr.
+#
+# Every run keeps the .ipa as a workflow artifact for 14 days. A tag like ios-v0.12 also publishes it as a
+# GitHub Release (a public download), which release-ios.ps1 copies to jasonagibson.zapto.org/game.
+# Mac minutes count 10x against the free quota, so this runs only when the app or the game code changes.
+name: ios
+
+on:
+  push:
+    branches: [main]
+    tags: ["ios-v*"]
+    paths:
+      - "shared/**"
+      - "iosApp/**"
+      - "app/src/main/res/drawable-nodpi/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build the iPhone app
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write # only to attach the .ipa to a GitHub Release on an ios-v* tag
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17 (Gradle builds the Kotlin part)
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: The toolchain this ran against
+        run: |
+          sw_vers
+          xcodebuild -version
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset} (the shared module also targets Android, so Gradle wants the SDK)"
+
+      - name: Generate the Xcode project (XcodeGen)
+        working-directory: iosApp
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned, for a real iPhone)
+        working-directory: iosApp
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project SproutPals.xcodeproj \
+            -scheme SproutPals \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -200
+
+      - name: Package the .app into an .ipa
+        working-directory: iosApp
+        run: |
+          set -eu
+          app="build/Build/Products/Release-iphoneos/SproutPals.app"
+          test -d "$app" || { find build/Build/Products -maxdepth 3 -name "*.app"; exit 1; }
+          echo "pictures in the app: $(find "$app" -name 'char_*.png' | wc -l)"
+          mkdir -p Payload
+          cp -R "$app" Payload/
+          zip -qry SproutPals.ipa Payload
+          rm -rf Payload
+          ls -lh SproutPals.ipa
+          shasum -a 256 SproutPals.ipa | tee SproutPals.ipa.sha256
+
+      - name: Keep the .ipa for 14 days
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SproutPals-unsigned-ipa
+          path: |
+            iosApp/SproutPals.ipa
+            iosApp/SproutPals.ipa.sha256
+          retention-days: 14
+
+      - name: Publish it on a release tag (ios-v*)
+        if: startsWith(github.ref, 'refs/tags/ios-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release create "$TAG" iosApp/SproutPals.ipa iosApp/SproutPals.ipa.sha256 --repo "$REPO" \
+            --title "Sprout Pals for iPhone ${TAG#ios-v}" \
+            --notes "Unsigned iPhone build. Install with SideStore or AltStore (free Apple ID; re-sign every 7 days)."

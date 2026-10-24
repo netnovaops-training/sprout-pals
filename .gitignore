@@ -21,6 +21,13 @@ local.properties
 Thumbs.db
 .kotlin/
 
+# --- iPhone app: the Xcode project is generated from iosApp/project.yml ---
+iosApp/*.xcodeproj/
+iosApp/build/
+iosApp/Payload/
+iosApp/*.ipa
+iosApp/*.ipa.sha256
+
 # --- server ---
 server/target/
 server/*.db
