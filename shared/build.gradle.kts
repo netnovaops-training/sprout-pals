@@ -12,7 +12,7 @@ plugins {
 kotlin {
     androidLibrary {
         namespace = "org.jasonagibson.sproutpals.shared"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 34
         // the rules' unit tests run on the computer (JVM), as before
         withHostTestBuilder {}
