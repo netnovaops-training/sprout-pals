@@ -1,6 +1,6 @@
 //! SQLite storage: players, friendships, hearts, visits.
 
-use rand::Rng;
+use rand::RngExt;
 use serde::Serialize;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
@@ -175,11 +175,12 @@ impl Store {
         Ok(rows.iter().map(|r| Visitor { code: r.get(0), species: r.get(1), stage: r.get(2), outfit: r.get(3), until: r.get(4) }).collect())
     }
 
-    /// New player: a fresh garden code and a secret token (64 hex chars from the OS RNG).
+    /// New player: a fresh garden code and a secret token (64 hex chars). `rand::rng()` is a
+    /// cryptographically secure generator seeded (and reseeded) from the operating system.
     pub async fn register(&self) -> sqlx::Result<(String, String)> {
         let token: String = {
-            let mut rng = rand::rngs::OsRng;
-            (0..32).map(|_| format!("{:02x}", rng.gen::<u8>())).collect()
+            let mut rng = rand::rng();
+            (0..32).map(|_| format!("{:02x}", rng.random::<u8>())).collect()
         };
         // retry on the (tiny) chance of a code collision
         for _ in 0..10 {
@@ -311,8 +312,8 @@ fn player(r: &sqlx::sqlite::SqliteRow) -> Player {
 }
 
 fn new_code() -> String {
-    let mut rng = rand::rngs::OsRng;
-    (0..CODE_LEN).map(|_| CODE_ALPHABET[rng.gen_range(0..CODE_ALPHABET.len())] as char).collect()
+    let mut rng = rand::rng();
+    (0..CODE_LEN).map(|_| CODE_ALPHABET[rng.random_range(0..CODE_ALPHABET.len())] as char).collect()
 }
 
 /// Accepts what people actually type: lower case, spaces, dashes. Returns None if it can't be a code.

@@ -12,7 +12,8 @@ name: detekt
 
 on:
   push:
-    branches: [main]
+    # apple: the iPhone version, where the shared Kotlin (shared/) lives
+    branches: [main, apple]
     paths:
       - "app/**"
       - "shared/**"

@@ -123,9 +123,16 @@ private object IosStore {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private const val KEY = "save"
 
-    fun load(): Save = NSUserDefaults.standardUserDefaults.stringForKey(KEY)
-        ?.let { runCatching { json.decodeFromString(Save.serializer(), it) }.getOrNull() }
-        ?: Save(pet = PetEngine.newPet(nowMillis(), Random.Default))
+    /** A save that could not be read is kept here (once) instead of being silently replaced. */
+    private const val UNREADABLE = "save-unreadable"
+
+    fun load(): Save {
+        val d = NSUserDefaults.standardUserDefaults
+        val raw = d.stringForKey(KEY)
+        raw?.let { runCatching { json.decodeFromString(Save.serializer(), it) }.getOrNull() }?.let { return it }
+        if (raw != null && d.stringForKey(UNREADABLE) == null) d.setObject(raw, UNREADABLE)
+        return Save(pet = PetEngine.newPet(nowMillis(), Random.Default))
+    }
 
     fun save(s: Save) = NSUserDefaults.standardUserDefaults.setObject(json.encodeToString(Save.serializer(), s), KEY)
 }

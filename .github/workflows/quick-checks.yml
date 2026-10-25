@@ -11,7 +11,7 @@ name: quick-checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, apple]   # apple: the iPhone version
   pull_request:
     branches: [main]
   workflow_dispatch:

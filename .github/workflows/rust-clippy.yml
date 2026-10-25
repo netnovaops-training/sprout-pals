@@ -6,7 +6,7 @@ name: rust-clippy analyze
 
 on:
   push:
-    branches: [main]
+    branches: [main, apple]   # apple: the iPhone version
     paths:
       - "server/**"
       - ".github/workflows/rust-clippy.yml"
