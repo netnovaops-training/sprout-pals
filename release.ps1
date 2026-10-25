@@ -3,10 +3,12 @@
 #   pass-cli run --env-file signing.env -- powershell -NoProfile -File release.ps1 "what changed"
 #
 # 1. builds the release APK, signed with the release key (password from Proton Pass, never shown)
-# 2. writes version.json (versionCode, versionName, md5, notes) - the app compares versionCode
+# 2. writes version.json (versionCode, versionName, sha256, md5, notes) - the app compares versionCode;
+#    0.14+ checks the download's sha256, md5 stays only so phones on 0.13 or older can still update
 # 3. copies both to the NUC's web/public/game/, served at https://jasonagibson.zapto.org/game/
 #
-# Bump versionCode in app/build.gradle.kts before each release, or phones won't see an update.
+# Bump versionCode AND versionName in app/build.gradle.kts before each release, or phones won't see
+# an update (this script does not bump them).
 param([string]$Notes = "")
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -28,7 +30,8 @@ if (-not (Test-Path $apk)) { Write-Output "No signed APK at $apk (is the release
 $gradle = Get-Content 'app\build.gradle.kts' -Raw
 $code = [int]([regex]::Match($gradle, 'versionCode\s*=\s*(\d+)').Groups[1].Value)
 $name = [regex]::Match($gradle, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
-$md5 = (Get-FileHash $apk -Algorithm MD5).Hash.ToLower()
+$sha256 = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
+$md5 = (Get-FileHash $apk -Algorithm MD5).Hash.ToLower()   # for apps before 0.14 only
 
 $out = Join-Path $PSScriptRoot 'build-release'
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -37,6 +40,7 @@ $manifest = [ordered]@{
     versionCode = $code
     versionName = $name
     url         = 'https://jasonagibson.zapto.org/game/sproutpals.apk'
+    sha256      = $sha256
     md5         = $md5
     notes       = $Notes
 } | ConvertTo-Json
@@ -49,5 +53,5 @@ if ($LASTEXITCODE -ne 0) { Write-Output 'Copy to the NUC failed.'; exit 1 }
 & scp -q -o BatchMode=yes (Join-Path $out 'version.json') 'server@192.168.86.86:nuc-homelab/web/public/game/version.json'
 if ($LASTEXITCODE -ne 0) { Write-Output 'Copy to the NUC failed.'; exit 1 }
 
-Write-Output "Published Sprout Pals $name (code $code), md5 $md5"
+Write-Output "Published Sprout Pals $name (code $code), sha256 $sha256"
 Write-Output 'Install link: https://jasonagibson.zapto.org/game/sproutpals.apk'
