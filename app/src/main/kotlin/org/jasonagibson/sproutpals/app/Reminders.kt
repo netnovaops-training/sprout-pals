@@ -14,12 +14,14 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import org.jasonagibson.sproutpals.R
+import org.jasonagibson.sproutpals.engine.Alert
 import org.jasonagibson.sproutpals.engine.Alerts
 import org.jasonagibson.sproutpals.engine.PetEngine
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Steps
+import org.jasonagibson.sproutpals.engine.Stop
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -31,24 +33,33 @@ import kotlin.random.Random
  */
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
+    /** What one run found, for the notifications sent after the save is written. */
+    private class Found(val arrived: List<Stop>, val news: List<String>, val alerts: List<Alert>)
+
     override suspend fun doWork(): Result {
         val store = Store(applicationContext)
-        var save = store.load()
-        Pedometer(applicationContext).readOnce()?.let { save = Steps.apply(save, it) }
-        val (withPrizes, arrived) = Route.collect(save)
-        save = withPrizes
-        Milestones.announce(applicationContext, arrived)
-        val now = System.currentTimeMillis() + save.timeOffset
-        val zone = ZoneId.systemDefault()
-        // the garden's hours (creatures, weather) and the pet's minutes, played forward
-        val (visited, news) = Visitors.catchUp(save, now, zone, Random.Default)
-        save = visited.copy(pet = PetEngine.advance(visited.pet, now, zone, Random.Default))
-
-        // each alert once, until it clears; garden news as it happens
-        val eve = save.pet.hatchedAt?.let { Rules.birthdaySoon(now - it) } ?: false
-        val (fresh, keys) = Alerts.fresh(save, now, eve)
-        save = save.copy(notified = keys)
-        store.save(save)
+        // the slow part (the step sensor) first, outside the save lock
+        val reading = Pedometer(applicationContext).readOnce()
+        // then everything else in one locked step on the save as it is RIGHT NOW, so a purchase
+        // made in the app a moment ago is never replaced by an older copy
+        val (save, found) = store.update { current ->
+            var s = current
+            reading?.let { s = Steps.apply(s, it) }
+            val (withPrizes, arrived) = Route.collect(s)
+            s = withPrizes
+            val now = System.currentTimeMillis() + s.timeOffset
+            val zone = ZoneId.systemDefault()
+            // the garden's hours (creatures, weather) and the pet's minutes, played forward
+            val (visited, news) = Visitors.catchUp(s, now, zone, Random.Default)
+            s = visited.copy(pet = PetEngine.advance(visited.pet, now, zone, Random.Default))
+            // each alert once, until it clears; garden news as it happens
+            val eve = s.pet.hatchedAt?.let { Rules.birthdaySoon(now - it) } ?: false
+            val (fresh, keys) = Alerts.fresh(s, now, eve)
+            s.copy(notified = keys) to Found(arrived, news, fresh)
+        }
+        Milestones.announce(applicationContext, found.arrived)
+        val fresh = found.alerts
+        val news = found.news
         PalWidget.refresh(applicationContext, save)
         fresh.forEach { notify(applicationContext, it.key, it.text) }
         news.takeLast(2).forEach { notify(applicationContext, "news:$it", it.replace('\n', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }) }
