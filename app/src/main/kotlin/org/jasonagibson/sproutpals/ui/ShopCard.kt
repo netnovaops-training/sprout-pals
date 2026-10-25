@@ -104,6 +104,7 @@ fun ShopCard(game: Game, p: Panel.Shop) {
                     BasicText(item.blurb.replace('\n', ' '), style = mono.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold))
                     Spacer(Modifier.height(3.dp))
                     when {
+                        item.daily && Shop.watching(save, game.now()) -> Chip("☑ ON GUARD TODAY", GOOD, CREAM)
                         !owned -> Chip("PRICE ★ ${item.price}" + if (item.repeatable && save.mysteryCount > 0) "  ×${save.mysteryCount}" else "", GOLD)
                         on -> Chip(if (item.slot != null) "☑ WEARING" else "☑ IN THE GARDEN", GOOD, CREAM)
                         else -> Chip(when { item.slot != null -> "☐ IN THE CLOSET"; item.tab == ShopTab.DECOR -> "☐ IN THE SHED"; else -> "☐ AT HOME" }, CREAM)

@@ -379,6 +379,9 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
                 is org.jasonagibson.sproutpals.engine.TicTacToe -> "game_ttt"
                 is org.jasonagibson.sproutpals.engine.HigherLower -> "game_hilo"
                 is org.jasonagibson.sproutpals.engine.PlantHarvest -> "game_harvest"
+                is org.jasonagibson.sproutpals.engine.TwentyOne -> "game_21"
+                is org.jasonagibson.sproutpals.engine.Slots -> "game_slots"
+                is org.jasonagibson.sproutpals.engine.ScareCrows -> "game_crows"
             },
         )
     }
@@ -475,7 +478,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     private fun shopPress(p: Panel.Shop) {
         val item = Shop.items(p.tab, save).getOrNull(p.choice) ?: return
-        val (next, result) = Shop.press(save, item, now())
+        val (next, result) = Shop.press(save, item, now(), zone)
         commit(next)
         // the last purchase of a repeatable item takes it off the shelf: step back onto the list
         val left = Shop.items(p.tab, next).size
@@ -484,10 +487,17 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val note = when (result) {
             ShopResult.BOUGHT -> {
                 onSound(Chiptune.Sfx.ARRIVE)
-                if (!item.repeatable) { count("buy"); count("own:${item.id}") }
+                if (!item.repeatable) count("buy")
+                if (!item.repeatable && !item.daily) count("own:${item.id}")
                 if (item.repeatable && next.mysteryCount >= Shop.MAX_REPEAT) count("secret_charm")
-                if (item.repeatable) "?????" else if (wear) "YOURS! WEARING IT" else "YOURS! IT'S IN YOUR GARDEN"
+                when {
+                    item.repeatable -> "?????"
+                    item.daily -> "ON GUARD UNTIL MIDNIGHT!"
+                    wear -> "YOURS! WEARING IT"
+                    else -> "YOURS! IT'S IN YOUR GARDEN"
+                }
             }
+            ShopResult.ACTIVE -> "ALREADY ON GUARD TODAY"
             ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
             ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
             ShopResult.TOO_POOR -> "NEED ${item.price - save.points} MORE ★"

@@ -155,6 +155,8 @@ data class Save(
     val notified: List<String> = emptyList(),
     /** Times the last creature-page item was bought. */
     val mysteryCount: Int = 0,
+    /** The SCARECROW WATCH guards the garden until this time (clock ms; the next midnight after buying). */
+    val scarecrowUntil: Long = 0,
     /** Day number of the last SHOP long press. */
     val secretDay: Long = -1,
     /** Button beeps and jingles. */

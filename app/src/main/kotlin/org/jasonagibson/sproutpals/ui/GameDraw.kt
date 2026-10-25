@@ -12,7 +12,10 @@ import org.jasonagibson.sproutpals.engine.Kind
 import org.jasonagibson.sproutpals.engine.MiniGame
 import org.jasonagibson.sproutpals.engine.PetState
 import org.jasonagibson.sproutpals.engine.PlantHarvest
+import org.jasonagibson.sproutpals.engine.ScareCrows
+import org.jasonagibson.sproutpals.engine.Slots
 import org.jasonagibson.sproutpals.engine.TicTacToe
+import org.jasonagibson.sproutpals.engine.TwentyOne
 import kotlin.math.PI
 import kotlin.math.cos
 
@@ -37,7 +40,15 @@ fun DrawScope.drawMiniGame(g: MiniGame, pet: PetState, frame: Int, top: Int, gro
         is TicTacToe -> ticTacToe(g, pet, frame, top, ground, u)
         is HigherLower -> higherLower(g, pet, frame, top, ground, u)
         is PlantHarvest -> plantHarvest(g, pet, frame, top, ground, u)
+        is TwentyOne -> twentyOne(g, pet, frame, top, ground, u)
+        is Slots -> slots(g, pet, frame, top, ground, u)
+        is ScareCrows -> scareCrows(g, frame, ground, u)
     }
+}
+
+/** A small picture from rows of letters; each letter is a color in [colors], '.' is see-through. */
+private fun DrawScope.grid(rows: List<String>, colors: Map<Char, Long>, x: Int, y: Int, u: Float) {
+    rows.forEachIndexed { r, row -> row.forEachIndexed { k, ch -> colors[ch]?.let { px(x + k, y + r, 1, 1, it, u) } } }
 }
 
 // ---------- Plant & Harvest ----------
@@ -152,6 +163,8 @@ private val DIGITS = mapOf(
     '6' to listOf("###", "#..", "###", "#.#", "###"), '7' to listOf("###", "..#", ".#.", ".#.", ".#."),
     '8' to listOf("###", "#.#", "###", "#.#", "###"), '9' to listOf("###", "#.#", "###", "..#", "###"),
     '?' to listOf("###", "..#", ".##", "...", ".#."),
+    'A' to listOf(".#.", "#.#", "###", "#.#", "#.#"), 'J' to listOf("..#", "..#", "..#", "#.#", "###"),
+    'Q' to listOf("###", "#.#", "#.#", "###", "..#"), 'K' to listOf("#.#", "##.", "#..", "##.", "#.#"),
 )
 
 private fun DrawScope.bigChar(c: Char, x: Int, y: Int, scale: Int, color: Long, u: Float) {
@@ -179,4 +192,118 @@ private fun DrawScope.higherLower(g: HigherLower, pet: PetState, f: Int, top: In
         null -> CharacterArt.Pose.STAND
     }
     pal(pet, 46f, ground.toFloat() + 1, u, pose, 16f)
+}
+
+// ---------- 21 ----------
+
+/** One playing card, 11 x 15: the rank in big blocky type, or the back if [faceDown]. */
+private fun DrawScope.playingCard(rank: Int, x: Int, y: Int, faceDown: Boolean, u: Float) {
+    px(x - 1, y - 1, 13, 17, 0xFF2B2B33, u)
+    if (faceDown) {
+        px(x, y, 11, 15, 0xFF3C7DD9, u)
+        for (k in 0 until 5) px(x + 2 + k, y + 3 + k * 2, 3, 1, 0xFF9CC4F2, u)      // a little stripe pattern
+        return
+    }
+    px(x, y, 11, 15, 0xFFFFF8E4, u)
+    val red = rank % 2 == 0                                   // alternate red and black, like two suits
+    val color = if (red) 0xFFE0344BL else 0xFF2B2B33L
+    when (rank) {
+        10 -> { bigChar('1', x + 1, y + 5, 1, color, u); bigChar('0', x + 5, y + 5, 1, color, u) }
+        else -> bigChar(listOf('A', '2', '3', '4', '5', '6', '7', '8', '9', '?', 'J', 'Q', 'K')[rank - 1], x + 2, y + 3, 2, color, u)
+    }
+}
+
+/** A hand's total in small digits, e.g. "17". */
+private fun DrawScope.smallNumber(n: Int, x: Int, y: Int, color: Long, u: Float) {
+    n.toString().forEachIndexed { i, ch -> bigChar(ch, x + i * 4, y, 1, color, u) }
+}
+
+private fun DrawScope.twentyOne(g: TwentyOne, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+    // the pal's hand on top, yours below; up to 6 cards fit in a row
+    g.pal.forEachIndexed { i, r -> playingCard(r, 4 + i * 12, top + 6, faceDown = i == 1 && g.hidden, u) }
+    g.you.forEachIndexed { i, r -> playingCard(r, 4 + i * 12, top + 28, faceDown = false, u) }
+    if (!g.hidden) smallNumber(TwentyOne.total(g.pal), 4 + g.pal.size * 12 + 2, top + 11, 0xFF2B2B33, u)
+    val mine = TwentyOne.total(g.you)
+    smallNumber(mine, 4 + g.you.size * 12 + 2, top + 33, if (mine > 21) 0xFFE0344BL else 0xFF3E8F26L, u)
+    // the pal deals from the side and cheers when it wins a hand
+    val pose = if (g.callout == "YOUR PAL WINS" || g.callout == "BUST!") CharacterArt.Pose.cheer(pet.species.kind) else CharacterArt.Pose.wave(pet.species.kind, f)
+    pal(pet, 86f, ground.toFloat() + 1, u, pose, 16f, faceLeft = true)
+}
+
+// ---------- Slots ----------
+
+private val SLOT_ART = listOf(
+    // strawberry
+    listOf("...GG....", "..GGGG...", ".RRRRRR..", "RRWRRRRR.", "RRRRRWRR.", ".RRRRRR..", "..RWRR...", "...RR...."),
+    // carrot
+    listOf("....GG...", "...GGGG..", "..OOOO...", "..OOOO...", "...OOO...", "...OO....", "...OO....", "....O...."),
+    // sunflower
+    listOf("..Y.Y.Y..", ".YYYYYYY.", "YYBBBBYY.", ".YBBBBY..", "YYBBBBYY.", ".YYYYYYY.", "..Y.G.Y..", "....G...."),
+    // tomato
+    listOf("...GGG...", "..RGRGR..", ".RRRRRRR.", "RRWRRRRRR", "RRRRRRRRR", "RRRRRRRRR", ".RRRRRRR.", "..RRRRR.."),
+    // star
+    listOf("....Y....", "...YYY...", "YYYYYYYYY", ".YYYYYYY.", "..YYYYY..", ".YYY.YYY.", ".YY...YY.", "........."),
+    // bug
+    listOf("..K...K..", "...K.K...", "..PPPPP..", "KPPKPKPPK", "..PPPPP..", "KPPPPPPPK", "..PPPPP..", ".K.....K."),
+)
+private val SLOT_COLORS = mapOf(
+    'R' to 0xFFE0344BL, 'W' to 0xFFFFF0F0L, 'G' to 0xFF4E9E3AL, 'O' to 0xFFF2912DL,
+    'Y' to 0xFFFFD84AL, 'B' to 0xFF6B4423L, 'K' to 0xFF2B2B33L, 'P' to 0xFF8E4FC9L,
+)
+
+private fun DrawScope.slots(g: Slots, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+    // the machine: a wooden cabinet with three windows and a lever on the right
+    px(12, top + 4, 70, 36, 0xFF8A5A2E, u)
+    px(14, top + 6, 66, 32, 0xFFB5824A, u)
+    for (i in 0..2) {
+        val x = 17 + i * 21
+        val y = top + 10
+        val hold = g.held == i
+        px(x - 1, y - 1, 19, 20, if (hold) 0xFFFFD84AL else 0xFF2B2B33L, u)
+        px(x, y, 17, 18, 0xFFFFF8E4, u)
+        grid(SLOT_ART[g.reels[i]], SLOT_COLORS, x + 4, y + 5, u)
+        if (g.spin[i] > 0 && f % 2 == 0) { px(x, y + 3, 17, 1, 0x55000000L, u); px(x, y + 13, 17, 1, 0x55000000L, u) }   // a blur while it spins
+        // HOLD: a gold tag under the window, one dot per pull it stays held
+        if (hold) {
+            px(x + 2, y + 21, 13, 4, 0xFFFFD84A, u)
+            repeat(g.holdPulls) { k -> px(x + 5 + k * 5, y + 22, 2, 2, 0xFF2B2B33, u) }
+        }
+    }
+    // lever: pulled down while the reels spin
+    val down = g.spinning()
+    px(84, top + 14, 3, 18, 0xFF7D7D85, u)
+    px(83, if (down) top + 28 else top + 8, 5, 5, 0xFFE0344B, u)
+    // the pal cheers a win from the left
+    val pose = if (g.lastWin > 0 && !down) CharacterArt.Pose.cheer(pet.species.kind) else CharacterArt.Pose.STAND
+    pal(pet, 6f, ground.toFloat() + 1, u, pose, 14f)
+}
+
+// ---------- Scare the Crows ----------
+
+private val CROW = listOf("..KK...", ".KKKKO.", "KKKKKK.", ".KKKK..", "..O.O..")
+private val CROW_COLORS = mapOf('K' to 0xFF1B1B22L, 'O' to 0xFFF2912DL)
+
+private fun DrawScope.scareCrows(g: ScareCrows, f: Int, ground: Int, u: Float) {
+    val bedY = ground - 8
+    for (i in 0 until g.beds) {
+        val cx = plotCenter(i)
+        px(cx - 7, bedY, 15, 3, 0xFF5C3A1A, u)                                      // soil
+        px(cx - 4, bedY - 3, 1, 3, 0xFF5BC236, u); px(cx, bedY - 4, 1, 4, 0xFF5BC236, u); px(cx + 4, bedY - 3, 1, 3, 0xFF5BC236, u)   // sprouts
+        val left = g.crow[i]
+        if (left > 0) {
+            val hop = if (f % 4 < 2) 0 else 1
+            grid(CROW, CROW_COLORS, cx - 3, bedY - 9 - hop, u)
+            // how long until it pecks: a bar that shrinks and turns red
+            px(cx - 5, bedY - 13, 11 * left / 24, 2, if (left < 8) 0xFFE0344BL else 0xFFFFD84AL, u)
+        }
+    }
+    // the scarecrow you move, arms up while it waves
+    val cx = plotCenter(g.cursor)
+    val y = bedY - 26
+    px(cx - 3, y, 7, 2, 0xFFF0D27A, u); px(cx - 2, y - 2, 5, 2, 0xFFF0D27A, u)            // straw hat
+    px(cx - 2, y + 2, 5, 4, 0xFFE8C9A0, u); px(cx - 1, y + 3, 1, 1, 0xFF1B1B1B, u); px(cx + 1, y + 3, 1, 1, 0xFF1B1B1B, u)   // face
+    px(cx - 2, y + 6, 5, 7, 0xFFC8323C, u)                                             // shirt
+    if (g.waving > 0) { px(cx - 7, y + 2, 5, 2, 0xFFC8323C, u); px(cx + 3, y + 2, 5, 2, 0xFFC8323C, u) }   // arms up
+    else { px(cx - 7, y + 7, 5, 2, 0xFFC8323C, u); px(cx + 3, y + 7, 5, 2, 0xFFC8323C, u) }
+    px(cx, y + 13, 1, 11, 0xFF8A5A2E, u)                                               // the pole
 }
