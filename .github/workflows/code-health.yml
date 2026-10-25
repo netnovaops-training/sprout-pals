@@ -138,13 +138,13 @@ jobs:
           done < reqs.txt
       - name: Upload Ruff to Code scanning
         if: needs.detect.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: ruff.sarif
           category: ruff
       - name: Upload Bandit to Code scanning
         if: needs.detect.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: bandit.sarif
           category: bandit
@@ -233,7 +233,7 @@ jobs:
           done < compose.txt
       - name: Upload Hadolint to Code scanning
         if: needs.detect.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: hadolint.sarif
           category: hadolint
@@ -378,7 +378,7 @@ jobs:
           echo "### Semgrep 1.181.0: $count findings" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload to Code scanning
         if: needs.detect.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: semgrep.sarif
           category: semgrep
@@ -423,7 +423,7 @@ jobs:
           echo "### Trivy: $count HIGH/CRITICAL findings" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload to Code scanning
         if: needs.detect.outputs.upload == 'true'
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: trivy.sarif
           category: trivy
