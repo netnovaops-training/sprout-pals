@@ -1,0 +1,442 @@
+# Whole-repo code health, around the clock: on every push, every pull request and once a day.
+# The same file in every repo. It looks at what the repo holds and runs only what applies:
+#
+#   python      Ruff (lint), Bandit (security, medium+), pip-audit (every requirements*.txt)
+#   javascript  npm audit (every package-lock.json), ESLint where the folder has an ESLint config
+#   containers  Hadolint (every Dockerfile), docker compose config check (every compose file)
+#   apis        Spectral (OpenAPI/Swagger rules) on every OpenAPI or Swagger file
+#   base        gitleaks, ShellCheck, PSScriptAnalyzer, actionlint, zizmor
+#               (skipped when the repo has its own quick-checks.yml or checks.yml, which already run them)
+#   deep        Semgrep (p/default + p/secrets), Trivy (vulnerabilities, secrets, misconfigurations),
+#               OSV-Scanner (every lock file)   (skipped when the repo has its own deep-scans.yml)
+#
+# Finds things, does not fail on them, except: a leaked secret, a PSScriptAnalyzer Error, an actionlint
+# error, or a high-severity zizmor finding. Results go to Security > Code scanning (one category per
+# tool) on public repos; private repos have no Code scanning on this plan, so there they go to the run
+# summary and a downloadable artifact. CodeQL is GitHub's own default setup, switched on separately.
+# Source of truth: netnovaops-training/checks (.github/workflows/code-health.yml).
+name: code-health
+
+on:
+  push:
+    branches-ignore: ['dependabot/**']
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: what this repo holds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.d.outputs.python }}
+      js: ${{ steps.d.outputs.js }}
+      containers: ${{ steps.d.outputs.containers }}
+      openapi: ${{ steps.d.outputs.openapi }}
+      base: ${{ steps.d.outputs.base }}
+      deep: ${{ steps.d.outputs.deep }}
+      upload: ${{ steps.d.outputs.upload }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: d
+        env:
+          PRIVATE: ${{ github.event.repository.private }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          files=$(git ls-files | grep -vE '(^|/)(node_modules|vendor|target|\.venv|venv)/')
+          flag() { if printf '%s\n' "$files" | grep -qE "$2"; then echo "$1=true"; else echo "$1=false"; fi; }
+          {
+            flag python '\.py$'
+            flag js '(^|/)package-lock\.json$'
+            flag containers '(^|/)(Dockerfile[^/]*|[^/]*\.dockerfile|(docker-)?compose[^/]*\.ya?ml)$'
+            if printf '%s\n' "$files" | grep -E '\.(ya?ml|json)$' | xargs -r -d '\n' grep -lsE '^(openapi|swagger):|"(openapi|swagger)" *:' | grep -q .; then
+              echo "openapi=true"; else echo "openapi=false"; fi
+            if [ -f .github/workflows/quick-checks.yml ] || [ -f .github/workflows/checks.yml ]; then echo "base=false"; else echo "base=true"; fi
+            if [ -f .github/workflows/deep-scans.yml ]; then echo "deep=false"; else echo "deep=true"; fi
+            # Code scanning upload: public repos, and never from a fork's pull request
+            if [ "$PRIVATE" != "true" ] && { [ "$EVENT_NAME" != "pull_request" ] || [ "$HEAD_REPO" = "$REPO" ]; }; then
+              echo "upload=true"; else echo "upload=false"; fi
+          } | tee -a "$GITHUB_OUTPUT"
+
+  python:
+    name: python (ruff, bandit, pip-audit)
+    needs: detect
+    if: needs.detect.outputs.python == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF files
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Ruff 0.17.2 (lint)
+        run: |
+          set -u
+          pipx run --spec ruff==0.17.2 ruff check . --exit-zero --output-format sarif --output-file ruff.sarif
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('ruff.sarif'))['runs']))")
+          { echo "### Ruff 0.17.2: $count findings"; echo '```'
+            pipx run --spec ruff==0.17.2 ruff check . --exit-zero --statistics | head -20; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Bandit 1.9.4 (security, medium severity and up)
+        run: |
+          set -u
+          pipx run --spec 'bandit[sarif]==1.9.4' bandit -r . -ll --exit-zero -q -f sarif -o bandit.sarif \
+            -x ./.git,./node_modules,./target,./.venv,./venv
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('bandit.sarif'))['runs']))")
+          echo "### Bandit 1.9.4: $count medium/high findings" >> "$GITHUB_STEP_SUMMARY"
+      - name: pip-audit 2.10.1 (every requirements*.txt)
+        run: |
+          set -u
+          echo "### pip-audit 2.10.1" >> "$GITHUB_STEP_SUMMARY"
+          git ls-files | grep -E '(^|/)requirements[^/]*\.txt$' > reqs.txt || true
+          if [ ! -s reqs.txt ]; then echo "- no requirements files" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          while read -r f; do
+            # --no-deps --disable-pip: check the pinned versions as written, without installing anything
+            if pipx run --spec pip-audit==2.10.1 pip-audit -r "$f" --no-deps --disable-pip --progress-spinner off \
+                 -f json -o audit.json >audit.log 2>&1 || [ -s audit.json ]; then
+              n=$(python3 -c "import json; print(sum(len(d.get('vulns', [])) for d in json.load(open('audit.json')).get('dependencies', [])))")
+              echo "- \`$f\`: $n known vulnerabilities" >> "$GITHUB_STEP_SUMMARY"
+              python3 -c "import json; [print(f\"::warning file=$f::{d['name']} {d['version']}: {v['id']} (fixed in {', '.join(v.get('fix_versions') or ['-'])})\") for d in json.load(open('audit.json')).get('dependencies', []) for v in d.get('vulns', [])]"
+            else
+              echo "- \`$f\`: could not be checked ($(tail -1 audit.log | cut -c1-120))" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            rm -f audit.json
+          done < reqs.txt
+      - name: Upload Ruff to Code scanning
+        if: needs.detect.outputs.upload == 'true'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: ruff.sarif
+          category: ruff
+      - name: Upload Bandit to Code scanning
+        if: needs.detect.outputs.upload == 'true'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+      - name: Keep the reports (private repos)
+        if: needs.detect.outputs.upload != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python-reports
+          path: '*.sarif'
+
+  javascript:
+    name: javascript (npm audit, eslint)
+    needs: detect
+    if: needs.detect.outputs.js == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: npm audit and ESLint, per package-lock.json
+        run: |
+          set -u
+          echo "### JavaScript" >> "$GITHUB_STEP_SUMMARY"
+          git ls-files | grep -E '(^|/)package-lock\.json$' | grep -v node_modules > locks.txt || true
+          while read -r lock; do
+            dir=$(dirname "$lock")
+            ( cd "$dir" || exit 0
+              npm audit --package-lock-only --json > /tmp/audit.json 2>/dev/null || true
+              read -r high crit < <(python3 -c "import json; v=json.load(open('/tmp/audit.json')).get('metadata',{}).get('vulnerabilities',{}); print(v.get('high',0), v.get('critical',0))" 2>/dev/null || echo "? ?")
+              line="- \`$dir\`: npm audit: $crit critical, $high high"
+              if ls eslint.config.* .eslintrc* >/dev/null 2>&1; then
+                if npm ci --ignore-scripts --no-audit --no-fund >/dev/null 2>&1; then
+                  npx --no-install eslint . -f json -o /tmp/eslint.json >/dev/null 2>&1 || true
+                  read -r e w < <(python3 -c "import json; r=json.load(open('/tmp/eslint.json')); print(sum(x['errorCount'] for x in r), sum(x['warningCount'] for x in r))" 2>/dev/null || echo "? ?")
+                  line="$line; ESLint: $e errors, $w warnings"
+                else
+                  line="$line; ESLint: dependencies would not install"
+                fi
+              fi
+              echo "$line" >> "$GITHUB_STEP_SUMMARY" )
+          done < locks.txt
+
+  containers:
+    name: containers (hadolint, compose)
+    needs: detect
+    if: needs.detect.outputs.containers == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Hadolint 2.15.1 (every Dockerfile)
+        run: |
+          set -eu
+          curl -fsSL -o /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
+          echo "c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507  /tmp/hadolint" | sha256sum -c -
+          chmod +x /tmp/hadolint
+          git ls-files | grep -E '(^|/)(Dockerfile[^/]*|[^/]*\.dockerfile)$' | grep -vE '\.(bak|orig)[^/]*$' > dockerfiles.txt || true
+          if [ -s dockerfiles.txt ]; then
+            xargs -d '\n' /tmp/hadolint --no-fail -f sarif < dockerfiles.txt > hadolint.sarif
+          else
+            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hadolint"}},"results":[]}]}' > hadolint.sarif
+          fi
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('hadolint.sarif'))['runs']))")
+          echo "### Hadolint 2.15.1: $count findings in $(wc -l < dockerfiles.txt) Dockerfiles" >> "$GITHUB_STEP_SUMMARY"
+      - name: docker compose config (every compose file)
+        run: |
+          set -u
+          echo "### Compose files" >> "$GITHUB_STEP_SUMMARY"
+          git ls-files | grep -E '(^|/)(docker-)?compose[^/]*\.ya?ml$' | grep -vE '\.(bak|orig)' > compose.txt || true
+          while read -r f; do
+            if out=$(docker compose -f "$f" config -q --no-interpolate 2>&1); then
+              echo "- \`$f\`: valid" >> "$GITHUB_STEP_SUMMARY"
+            elif printf '%s' "$out" | grep -qiE 'env file|not found|no such file'; then
+              echo "- \`$f\`: needs files that are not in git (.env and similar); syntax not checked" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- \`$f\`: INVALID: $(printf '%s' "$out" | tail -1 | cut -c1-160)" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning file=$f::$(printf '%s' "$out" | tail -1 | cut -c1-200)"
+            fi
+          done < compose.txt
+      - name: Upload Hadolint to Code scanning
+        if: needs.detect.outputs.upload == 'true'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+      - name: Keep the report (private repos)
+        if: needs.detect.outputs.upload != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hadolint-report
+          path: hadolint.sarif
+
+  apis:
+    name: apis (spectral)
+    needs: detect
+    if: needs.detect.outputs.openapi == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Spectral 6.17.0 (OpenAPI and Swagger rules)
+        run: |
+          set -u
+          git ls-files | grep -E '\.(ya?ml|json)$' | xargs -r -d '\n' grep -lsE '^(openapi|swagger):|"(openapi|swagger)" *:' > apis.txt || true
+          ruleset=.spectral.yaml
+          [ -f "$ruleset" ] || { printf 'extends: ["spectral:oas"]\n' > /tmp/spectral.yaml; ruleset=/tmp/spectral.yaml; }
+          xargs -d '\n' npx --yes @stoplight/spectral-cli@6.17.0 lint -r "$ruleset" -f json -o spectral.json --fail-severity error < apis.txt || true
+          read -r e w < <(python3 -c "import json; r=json.load(open('spectral.json')); print(sum(1 for x in r if x['severity']==0), sum(1 for x in r if x['severity']==1))" 2>/dev/null || echo "? ?")
+          echo "### Spectral 6.17.0: $(wc -l < apis.txt) API files, $e errors, $w warnings" >> "$GITHUB_STEP_SUMMARY"
+
+  # --- base: the shared quick checks, for repos without their own quick-checks.yml ---------------
+  gitleaks:
+    name: gitleaks
+    needs: detect
+    if: needs.detect.outputs.base == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Secrets in the new commits (the daily run scans the whole history)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          range=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then range="$BASE_SHA..$HEAD_SHA"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then range="$BEFORE..$AFTER"; else range="origin/main..$AFTER"; fi
+          fi
+          echo "Scanning: ${range:-the whole history}"
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" \
+            zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo ${range:+--log-opts "$range"} --redact --no-banner --exit-code 1
+
+  shell:
+    name: shellcheck + psscriptanalyzer
+    needs: detect
+    if: needs.detect.outputs.base == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ShellCheck 0.11.0 (every *.sh; counts, does not fail)
+        run: |
+          set -u
+          git ls-files '*.sh' > sh-files.txt
+          if [ ! -s sh-files.txt ]; then echo "### ShellCheck: no shell scripts" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          # shellcheck disable=SC2046
+          docker run --rm -v "$PWD:/mnt" -w /mnt \
+            koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d \
+            -f gcc -S warning $(cat sh-files.txt) > found.txt || true
+          echo "### ShellCheck 0.11.0: $(wc -l < found.txt) warnings in $(wc -l < sh-files.txt) scripts" >> "$GITHUB_STEP_SUMMARY"
+          head -50 found.txt
+      - name: PSScriptAnalyzer 1.25.0 (fails on Error severity only)
+        shell: pwsh
+        run: |
+          $files = @(git ls-files '*.ps1')
+          if ($files.Count -eq 0) { '### PSScriptAnalyzer: no PowerShell scripts' | Out-File $env:GITHUB_STEP_SUMMARY -Append; exit 0 }
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          $results = foreach ($f in $files) { Invoke-ScriptAnalyzer -Path $f -Severity Error,Warning }
+          $errors = @($results | Where-Object Severity -eq 'Error')
+          $warnings = @($results | Where-Object Severity -eq 'Warning')
+          "### PSScriptAnalyzer 1.25.0: $($errors.Count) errors, $($warnings.Count) warnings in $($files.Count) scripts" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          foreach ($e in $errors) { "::error file=$($e.ScriptPath),line=$($e.Line)::$($e.RuleName): $($e.Message)" }
+          if ($errors.Count -gt 0) { exit 1 }
+
+  workflows:
+    name: actionlint + zizmor
+    needs: detect
+    if: needs.detect.outputs.base == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint 1.7.12
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+      - name: zizmor 1.30.1 (fails on high severity only)
+        env:
+          NO_COLOR: '1'
+        run: |
+          set -u
+          pipx run --spec zizmor==1.30.1 zizmor --offline --no-progress --format plain .github/workflows > zizmor-all.txt 2>&1 || true
+          echo "### zizmor 1.30.1: $(grep -i 'finding' zizmor-all.txt | tail -1)" >> "$GITHUB_STEP_SUMMARY"
+          pipx run --spec zizmor==1.30.1 zizmor --offline --no-progress --min-severity high .github/workflows
+
+  # --- deep: the shared deep scans, for repos without their own deep-scans.yml --------------------
+  semgrep:
+    name: semgrep
+    needs: detect
+    if: needs.detect.outputs.deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Semgrep 1.181.0 (p/default + p/secrets; finds things, does not fail on them)
+        run: |
+          set -eu
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src \
+            semgrep/semgrep:1.181.0@sha256:81474464c1f07483ba0682a44787fd93c91397419762a04abe2bafaae396304b \
+            semgrep scan --config p/default --config p/secrets --metrics=off --sarif --output semgrep.sarif --quiet
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('semgrep.sarif'))['runs']))")
+          echo "### Semgrep 1.181.0: $count findings" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to Code scanning
+        if: needs.detect.outputs.upload == 'true'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+      - name: Keep the report (private repos)
+        if: needs.detect.outputs.upload != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
+
+  trivy:
+    name: trivy (vulnerabilities, secrets, misconfigurations)
+    needs: detect
+    if: needs.detect.outputs.deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # uploads the SARIF file
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trivy file system + config scan (finds things, does not fail on them)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1,ghcr.io/aquasecurity/trivy-java-db:1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
+          format: sarif
+          output: trivy.sarif
+          exit-code: '0'
+      - name: Count
+        run: |
+          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('trivy.sarif'))['runs']))")
+          echo "### Trivy: $count HIGH/CRITICAL findings" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to Code scanning
+        if: needs.detect.outputs.upload == 'true'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+      - name: Keep the report (private repos)
+        if: needs.detect.outputs.upload != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-report
+          path: trivy.sarif
+
+  osv:
+    name: osv-scanner (every lock file)
+    needs: detect
+    if: needs.detect.outputs.deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: OSV-Scanner (finds things, does not fail on them)
+        continue-on-error: true # exits 1 on a finding
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --recursive
+            --format=table
+            --output=osv.txt
+            ./
+      - name: Summary
+        run: |
+          if [ -s osv.txt ]; then { echo "### OSV-Scanner"; echo '```'; head -60 osv.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          else echo "### OSV-Scanner: no lock files or no known vulnerabilities" >> "$GITHUB_STEP_SUMMARY"; fi
