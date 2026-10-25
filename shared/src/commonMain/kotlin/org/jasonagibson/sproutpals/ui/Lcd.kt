@@ -236,7 +236,7 @@ fun DrawScope.drawLcd(game: Game) {
     // ----- a mini-game takes over the garden while it runs -----
     val playing = game.mini
     // decor, then the ground and fence visitors, all behind the pet (not while walking: the scene scrolls)
-    if (playing == null && !dark && !walking) drawDecor(game.save, f, GROUND, px, night = sky == Sky.NIGHT || sky == Sky.SUNSET)
+    if (playing == null && !dark && !walking) drawDecor(game.save, f, GROUND, px, night = sky == Sky.NIGHT || sky == Sky.SUNSET, now = game.now())
     if (playing == null && !dark) drawBackCritters(game.save, f, AREA_TOP, GROUND, px)
     if (playing != null) drawMiniGame(playing, pet, f, AREA_TOP, GROUND, px)
 

@@ -56,6 +56,9 @@ import org.jasonagibson.sproutpals.engine.Shop
 import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.TicTacToe
 import org.jasonagibson.sproutpals.engine.PlantHarvest
+import org.jasonagibson.sproutpals.engine.ScareCrows
+import org.jasonagibson.sproutpals.engine.Slots
+import org.jasonagibson.sproutpals.engine.TwentyOne
 import org.jasonagibson.sproutpals.engine.Visitors
 import org.jasonagibson.sproutpals.engine.Rules
 import org.jasonagibson.sproutpals.engine.Stage
@@ -343,6 +346,9 @@ private val HOW_TO = listOf(
     "TIC-TAC-TOE\n\nYou are X.\nA / C: move\nB: place\nThree in a row wins",
     "HIGHER/LOWER\n\nWill the next\nnumber be...\nA: HIGHER\nC: LOWER\n5 rounds",
     "PLANT & HARVEST\n\nA ◀  move  ▶ C\nB: pick when the\nmeter hits gold!\nRipe = 1  Gold = 2\nDon't let them rot",
+    "21\n\nBeat your pal to 21!\nA: another card\nB: stay\nC: cash out\nOver 21 = bust\n5 hands",
+    "SLOTS\n\nA: pull the lever\nB: hold a reel\n(it stays 2 pulls)\nC: cash out\n3 alike = 5\n3 stars = 10",
+    "SCARE THE CROWS\n\nA ◀  move  ▶ C\nB: wave them off\nbefore they peck!\n5 pecks = out",
 )
 
 /** While a game runs: its buttons, always in view at the top of the garden. */
@@ -354,6 +360,13 @@ private fun GameHintStrip(g: MiniGame) {
         is TicTacToe -> "A/C: MOVE  B: PLACE"
         is HigherLower -> "A: HIGHER  C: LOWER   ${g.round}/${g.rounds}"
         is PlantHarvest -> (if (g.callout.isNotBlank()) "${g.callout}   " else "A◀ ▶C  B: PICK   ") + "★${g.score}  ⏱${g.timeLeft / 8}"
+        is TwentyOne -> g.callout.ifBlank { "A: CARD  B: STAY  C: CASH OUT" } + "   ${g.played + if (g.callout.isBlank()) 1 else 0}/${g.hands}"
+        is Slots -> when {
+            g.spinning() -> "SPINNING..."
+            g.lastWin > 0 -> "WIN +${g.lastWin}!   PULLS ${g.pullsLeft}"
+            else -> "A: PULL  B: HOLD  C: CASH OUT   ${g.pullsLeft}"
+        }
+        is ScareCrows -> "A◀ ▶C  B: SHOO!   ★${g.score}  ✕${g.pecks}/${g.maxPecks}  ⏱${g.timeLeft / 8}"
     }
     Box(Modifier.fillMaxSize().padding(top = 50.dp), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.clip(RoundedCornerShape(6.dp)).background(INK.copy(alpha = 0.86f)).padding(horizontal = 10.dp, vertical = 4.dp)) {

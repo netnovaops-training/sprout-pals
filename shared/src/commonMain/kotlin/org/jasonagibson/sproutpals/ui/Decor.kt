@@ -55,10 +55,11 @@ private val PIECES = linkedMapOf(
     ),
 )
 
-/** Draws every decor piece that's switched on. [night] lights the lantern. */
-fun DrawScope.drawDecor(save: Save, f: Int, ground: Int, px: Float, night: Boolean) {
+/** Draws every decor piece that's switched on. [night] lights the lantern. The scarecrow also
+ *  stands in the garden while a SCARECROW WATCH is on guard ([now] = the game clock). */
+fun DrawScope.drawDecor(save: Save, f: Int, ground: Int, px: Float, night: Boolean, now: Long) {
     for ((id, p) in PIECES) {
-        if (!Shop.showing(save, id)) continue
+        if (!Shop.showing(save, id) && !(id == "scarecrow" && Shop.watching(save, now))) continue
         var grid = p.grid
         // the pond's highlight drifts across the water
         if (id == "pond") grid = grid.mapIndexed { r, row -> if (r == 1) row.replace('L', 'B').let { it.substring(0, 3 + (f / 6) % 6) + "L" + it.substring(4 + (f / 6) % 6) } else row }
@@ -73,7 +74,7 @@ fun DrawScope.drawDecor(save: Save, f: Int, ground: Int, px: Float, night: Boole
 
 /** The decor piece's picture for the shop card, double size in a 24-unit box. */
 fun DrawScope.drawDecorPreview(id: String, u: Float): Boolean {
-    val p = PIECES[id] ?: return false
+    val p = PIECES[if (id == Shop.WATCH) "scarecrow" else id] ?: return false
     val w = p.grid.maxOf { it.length }
     val scale = if (w * 2 <= 22 && p.grid.size * 2 <= 22) 2 else 1
     shaded(p.grid, p.pal, (24 / scale - w) / 2, (24 / scale - p.grid.size) / 2, u * scale)

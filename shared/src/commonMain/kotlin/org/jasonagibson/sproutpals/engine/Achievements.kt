@@ -38,6 +38,9 @@ object Achievements {
         Feat("game_ttt", "TIC-TAC-TOE", "⭕"),
         Feat("game_hilo", "HIGHER / LOWER", "🔢"),
         Feat("game_harvest", "PLANT & HARVEST", "🌽"),
+        Feat("game_21", "21", "🃏"),
+        Feat("game_slots", "SLOTS", "🎰"),
+        Feat("game_crows", "SCARE THE CROWS", "🐦"),
         Feat("plant", "PLANT A SEED", "🌱"),
         Feat("water", "WATER THE GARDEN", "💧"),
         Feat("harvest", "HARVEST A CROP", "🧺"),
@@ -58,8 +61,8 @@ object Achievements {
         Feat("secret_charm", "THE LUCKY CHARM", "🍀", listOf(1), secret = true, reveal = "THE ???? ITEM: RARE JASON NOW HATCHES 15% OF THE TIME"),
     )
 
-    /** One per shop item you can own (the last creature-page item stays a secret). */
-    private val OWNING = Shop.ITEMS.filter { !it.repeatable }.map { Feat("own:${it.id}", "GOT THE ${it.name}", "🎁", listOf(1)) }
+    /** One per shop item you can own (the last creature-page item stays a secret; one-day items aren't owned). */
+    private val OWNING = Shop.ITEMS.filter { !it.repeatable && !it.daily }.map { Feat("own:${it.id}", "GOT THE ${it.name}", "🎁", listOf(1)) }
 
     val ALL: List<Feat> = DOING + OWNING + SECRETS
 

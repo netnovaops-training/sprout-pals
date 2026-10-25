@@ -1,5 +1,12 @@
 package org.jasonagibson.sproutpals.engine
 
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
+
 /**
  * The shop, in two pages: CREATURES (garden visitors) and OUTFITS (worn by your pal).
  * Bought with points from steps, care and games; once bought, they're yours for every pet and
@@ -20,9 +27,12 @@ data class ShopItem(
     val slot: Slot? = null,
     /** Can be bought more than once. */
     val repeatable: Boolean = false,
+    /** Bought for one day at a time (works until midnight), never owned. */
+    val daily: Boolean = false,
 )
 
-enum class ShopResult { BOUGHT, SHOWN, HIDDEN, TOO_POOR, MAXED }
+/** [ACTIVE]: a one-day item that is already working today. */
+enum class ShopResult { BOUGHT, SHOWN, HIDDEN, TOO_POOR, MAXED, ACTIVE }
 
 object Shop {
     private fun creature(id: String, name: String, price: Int, blurb: String) = ShopItem(id, name, price, blurb, ShopTab.CREATURES)
@@ -63,7 +73,21 @@ object Shop {
         decor("pond", "POND", 130, "Cool, calm\nwater"),
         decor("well", "WISHING WELL", 170, "Make a wish..."),
         decor("scarecrow", "SCARECROW", 220, "Keeps an eye\non the crops"),
+        // a day's guard, bought again each day it's wanted (Jason, 10-25: 500 ★, stops 25% of creature tricks)
+        ShopItem(WATCH, "SCARECROW WATCH", 500, "Stands guard\nuntil midnight", ShopTab.DECOR, daily = true),
     )
+
+    /** The one-day scarecrow, and the share of creature tricks it stops while on guard. */
+    const val WATCH = "scarecrow_watch"
+    const val WATCH_BLOCK_PERCENT = 25
+
+    /** Is the SCARECROW WATCH on guard at [now]? */
+    fun watching(save: Save, now: Long) = now < save.scarecrowUntil
+
+    /** The first moment of the next day in [zone]: when a one-day item stops working. */
+    fun midnightAfter(now: Long, zone: TimeZone): Long =
+        Instant.fromEpochMilliseconds(now).toLocalDateTime(zone).date.plus(1, DateTimeUnit.DAY)
+            .atStartOfDayIn(zone).toEpochMilliseconds()
 
     private fun decor(id: String, name: String, price: Int, blurb: String) = ShopItem(id, name, price, blurb, ShopTab.DECOR)
 
@@ -87,7 +111,12 @@ object Shop {
     const val OUT_HOURS = 24
 
     /** B on an item: buy it (it comes straight out), or switch one you own on or off. */
-    fun press(save: Save, item: ShopItem, now: Long = 0L): Pair<Save, ShopResult> {
+    fun press(save: Save, item: ShopItem, now: Long = 0L, zone: TimeZone = TimeZone.currentSystemDefault()): Pair<Save, ShopResult> {
+        if (item.daily) {
+            if (watching(save, now)) return save to ShopResult.ACTIVE
+            if (save.points < item.price) return save to ShopResult.TOO_POOR
+            return save.copy(points = save.points - item.price, scarecrowUntil = midnightAfter(now, zone)) to ShopResult.BOUGHT
+        }
         if (item.repeatable) {
             if (save.mysteryCount >= MAX_REPEAT) return save to ShopResult.MAXED
             if (save.points < item.price) return save to ShopResult.TOO_POOR

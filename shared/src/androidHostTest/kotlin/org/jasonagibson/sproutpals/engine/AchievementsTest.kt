@@ -20,7 +20,7 @@ class AchievementsTest {
     @Test fun `every ownable shop item has an achievement, the secret one does not`() {
         for (item in Shop.ITEMS) {
             val has = Achievements.feat("own:${item.id}") != null
-            assertEquals(item.name, !item.repeatable, has)
+            assertEquals(item.name, !item.repeatable && !item.daily, has)
         }
         assertFalse(Achievements.ALL.any { Rules.MYSTERY_ITEM in it.key })
     }

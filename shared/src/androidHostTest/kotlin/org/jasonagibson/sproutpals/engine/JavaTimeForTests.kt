@@ -23,3 +23,6 @@ fun Weather.plan(save: Save, at: Long, zone: ZoneId, rng: Random): Save =
 fun Calendar.season(d: LocalDate): Season = season(d.toKotlinLocalDate())
 
 fun Calendar.holiday(d: LocalDate): Holiday? = holiday(d.toKotlinLocalDate())
+
+fun Shop.press(save: Save, item: ShopItem, now: Long, zone: ZoneId): Pair<Save, ShopResult> =
+    press(save, item, now, zone.toKotlinTimeZone())

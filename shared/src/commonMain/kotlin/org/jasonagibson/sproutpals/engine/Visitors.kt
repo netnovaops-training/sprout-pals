@@ -47,6 +47,7 @@ object Visitors {
         "pond" to listOf(Perk("💦", "Cool water: no more bee stings")),
         "well" to listOf(Perk("✨", "About one wish a day: +3 ★")),
         "scarecrow" to listOf(Perk("🌾", "Birds and deer raid crops half as often")),
+        Shop.WATCH to listOf(Perk("🛡", "Today: stops 1 in 4 creature tricks"), Perk("🌙", "Goes back in the shed at midnight")),
     )
 
     /** Is creature [id] in the garden at [now]: switched on, or brought along by a cat for a while? */
@@ -119,10 +120,17 @@ object Visitors {
         val berry = if (has("birdbath")) 12 else 6         // birdbath: berries twice as often
         val stings = !has("pond")                          // pond: no more stings
         val lateNights = !has("lantern")                   // lantern: fireflies can't keep the pal up
-        // the pal's own ability may stop the mischief (Jason, Jun, the dogs - see Abilities)
+        // the SCARECROW WATCH (bought for the day) shoos off 1 in 4 tricks before anything else;
+        // then the pal's own ability may stop the mischief (Jason, Jun, the dogs - see Abilities).
         // a cat's guest brings only good things: its catches never happen
         var current = ""
-        fun ok(): Boolean = current != guest &&
+        val watch = Shop.watching(s, at)
+        fun shooed(): Boolean {
+            if (!watch || !chance(Shop.WATCH_BLOCK_PERCENT)) return false
+            news += "THE SCARECROW SHOOED\nTHE ${Shop.byId(current)?.name ?: "CRITTER"} AWAY!"
+            return true
+        }
+        fun ok(): Boolean = current != guest && !shooed() &&
             (Abilities.blocks(s.pet.species, fromCreature = true, rng, hour)?.let { news += it; false } ?: true)
         fun bad(pct: Int) = current != guest && chance(pct) && ok()
 
