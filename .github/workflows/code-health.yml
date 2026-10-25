@@ -1,0 +1,27 @@
+# Whole-repo code health: on every push, every pull request and once a day.
+# Thin caller; the checks live in netnovaops-training/Toolbox (shared-code-health.yml), pinned by commit.
+name: code-health
+
+on:
+  push:
+    branches-ignore: ['dependabot/**']
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  health:
+    uses: netnovaops-training/Toolbox/.github/workflows/shared-code-health.yml@8f279258c31976c696b8503efd9d1e2579aece74 # main
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # SARIF upload (public repo)
