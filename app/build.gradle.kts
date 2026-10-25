@@ -6,10 +6,10 @@ plugins {
 
 android {
     namespace = "org.jasonagibson.sproutpals"
+    // 37: the Compose libraries from the 2026.09 BOM need it to compile. Only what the app is
+    // built against; minSdk (which phones can install it) is unchanged.
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
