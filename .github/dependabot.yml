@@ -30,6 +30,24 @@ updates:
       cargo-minor-and-patch:
         update-types: [minor, patch]
 
+  # The game server's base images (FROM lines). The pull request's build and tests are the
+  # compatibility check; code-health.yml reports versions and vulnerabilities daily.
+  - package-ecosystem: docker
+    directory: /server
+    # wait a week after a version is published: brand-new releases are where bad packages hide
+    cooldown:
+      default-days: 7
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels: [dependencies, docker]
+    groups:
+      docker-minor-and-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

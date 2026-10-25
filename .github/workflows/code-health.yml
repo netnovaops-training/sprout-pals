@@ -9,6 +9,14 @@
 #               (skipped when the repo has its own quick-checks.yml or checks.yml, which already run them)
 #   deep        Semgrep (p/default + p/secrets), Trivy (vulnerabilities, secrets, misconfigurations),
 #               OSV-Scanner (every lock file)   (skipped when the repo has its own deep-scans.yml)
+#   images      third-party container images the repo USES but did not make (FROM lines, compose
+#               `image:` without `build:`): version in use, newest stable release, and Trivy's
+#               HIGH/CRITICAL vulnerability count. Scheduled and manual runs only. Updating them is
+#               Dependabot's job (docker / docker-compose); the PR's normal build and tests are the
+#               compatibility check.
+#
+# Private repos have 2,000 free Actions minutes a month, so there the schedule runs on Sundays only;
+# public repos run every day. Pushes and pull requests always run.
 #
 # Finds things, does not fail on them, except: a leaked secret, a PSScriptAnalyzer Error, an actionlint
 # error, or a high-severity zizmor finding. Results go to Security > Code scanning (one category per
@@ -46,6 +54,8 @@ jobs:
       base: ${{ steps.d.outputs.base }}
       deep: ${{ steps.d.outputs.deep }}
       upload: ${{ steps.d.outputs.upload }}
+      run: ${{ steps.d.outputs.run }}
+      images: ${{ steps.d.outputs.images }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,12 +81,19 @@ jobs:
             # Code scanning upload: public repos, and never from a fork's pull request
             if [ "$PRIVATE" != "true" ] && { [ "$EVENT_NAME" != "pull_request" ] || [ "$HEAD_REPO" = "$REPO" ]; }; then
               echo "upload=true"; else echo "upload=false"; fi
+            # private repos: the daily schedule only does real work on Sundays (free minutes)
+            if [ "$EVENT_NAME" = "schedule" ] && [ "$PRIVATE" = "true" ] && [ "$(date -u +%u)" != "7" ]; then
+              echo "run=false"; else echo "run=true"; fi
+            # the third-party image report: scheduled and manual runs, when the repo has containers
+            if { [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; } &&
+               printf '%s\n' "$files" | grep -qE '(^|/)(Dockerfile[^/]*|[^/]*\.dockerfile|(docker-)?compose[^/]*\.ya?ml)$'; then
+              echo "images=true"; else echo "images=false"; fi
           } | tee -a "$GITHUB_OUTPUT"
 
   python:
     name: python (ruff, bandit, pip-audit)
     needs: detect
-    if: needs.detect.outputs.python == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.python == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -141,7 +158,7 @@ jobs:
   javascript:
     name: javascript (npm audit, eslint)
     needs: detect
-    if: needs.detect.outputs.js == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.js == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -174,7 +191,7 @@ jobs:
   containers:
     name: containers (hadolint, compose)
     needs: detect
-    if: needs.detect.outputs.containers == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.containers == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -230,7 +247,7 @@ jobs:
   apis:
     name: apis (spectral)
     needs: detect
-    if: needs.detect.outputs.openapi == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.openapi == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -251,7 +268,7 @@ jobs:
   gitleaks:
     name: gitleaks
     needs: detect
-    if: needs.detect.outputs.base == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.base == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -281,7 +298,7 @@ jobs:
   shell:
     name: shellcheck + psscriptanalyzer
     needs: detect
-    if: needs.detect.outputs.base == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.base == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -316,7 +333,7 @@ jobs:
   workflows:
     name: actionlint + zizmor
     needs: detect
-    if: needs.detect.outputs.base == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.base == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -340,7 +357,7 @@ jobs:
   semgrep:
     name: semgrep
     needs: detect
-    if: needs.detect.outputs.deep == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -375,7 +392,7 @@ jobs:
   trivy:
     name: trivy (vulnerabilities, secrets, misconfigurations)
     needs: detect
-    if: needs.detect.outputs.deep == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -420,7 +437,7 @@ jobs:
   osv:
     name: osv-scanner (every lock file)
     needs: detect
-    if: needs.detect.outputs.deep == 'true'
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -440,3 +457,168 @@ jobs:
         run: |
           if [ -s osv.txt ]; then { echo "### OSV-Scanner"; echo '```'; head -60 osv.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           else echo "### OSV-Scanner: no lock files or no known vulnerabilities" >> "$GITHUB_STEP_SUMMARY"; fi
+
+  # --- images: third-party containers this repo uses but did not make --------------------------
+  images:
+    name: third-party images (version, newest stable, vulnerabilities)
+    needs: detect
+    if: needs.detect.outputs.run == 'true' && needs.detect.outputs.images == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report every third-party image (finds things, does not fail on them)
+        run: |
+          set -eu
+          pip install --quiet --user pyyaml==6.0.3
+          python3 - <<'PY'
+          """Images from FROM lines and compose `image:` entries, minus what this repo builds itself.
+
+          For each: the tag in use, the newest stable tag with the same shape (same number of version
+          parts and the same suffix, e.g. 16-alpine -> 17-alpine), and Trivy's HIGH/CRITICAL count.
+          """
+          import json, os, re, subprocess, urllib.error, urllib.parse, urllib.request
+          import yaml
+
+          TRIVY = ("aquasec/trivy:0.76.1@sha256:"
+                   "790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c")
+          skip = re.compile(r"(^|/)(node_modules|vendor|target)/|\.(bak|orig)")
+          files = [f for f in subprocess.run(["git", "ls-files"], capture_output=True, text=True,
+                                             check=True).stdout.splitlines() if not skip.search(f)]
+          refs, own = {}, set()
+
+          def add(ref, where):
+              ref = str(ref).strip().strip("'\"")
+              m = re.fullmatch(r"\$\{[A-Za-z0-9_]+:-([^}]+)\}", ref)
+              ref = m.group(1) if m else ref
+              if ref and "$" not in ref and ref != "scratch":
+                  refs.setdefault(ref, set()).add(where)
+
+          for f in files:
+              if re.search(r"(^|/)(Dockerfile[^/]*|[^/]*\.dockerfile)$", f):
+                  args, stages = {}, set()
+                  for line in open(f, encoding="utf-8", errors="replace"):
+                      a = re.match(r"\s*ARG\s+([A-Za-z0-9_]+)=(\S+)", line)
+                      if a:
+                          args[a.group(1)] = a.group(2).strip("'\"")
+                      m = re.match(r"\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?", line, re.I)
+                      if m:
+                          image = re.sub(r"\$\{?([A-Za-z0-9_]+)\}?", lambda x: args.get(x.group(1), x.group(0)), m.group(1))
+                          if image.lower() not in stages:
+                              add(image, f)
+                          if m.group(2):
+                              stages.add(m.group(2).lower())
+              elif re.search(r"(^|/)(docker-)?compose[^/]*\.ya?ml$", f):
+                  try:
+                      services = (yaml.safe_load(open(f, encoding="utf-8")) or {}).get("services") or {}
+                  except yaml.YAMLError:
+                      continue
+                  for svc in services.values():
+                      if isinstance(svc, dict) and svc.get("image"):
+                          if "build" in svc:
+                              own.add(str(svc["image"]))
+                          else:
+                              add(svc["image"], f)
+          for o in own:
+              refs.pop(o, None)
+
+          def parse(ref):
+              name, _, digest = ref.partition("@")
+              tag = ""
+              if ":" in name.rsplit("/", 1)[-1]:
+                  name, tag = name.rsplit(":", 1)
+              first = name.split("/", 1)[0]
+              if "." in first or ":" in first or first == "localhost":
+                  registry, repo = first, name.split("/", 1)[1]
+              else:
+                  registry, repo = "docker.io", name if "/" in name else "library/" + name
+              return registry, repo, tag or "latest", digest
+
+          def get(url, token=None):
+              req = urllib.request.Request(url, headers={"Accept": "application/json",
+                                                         **({"Authorization": f"Bearer {token}"} if token else {})})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.load(r), r.headers.get("Link", "")
+
+          def tags_of(registry, repo):
+              try:
+                  if registry == "docker.io":
+                      out, url = [], f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=100&ordering=last_updated"
+                      for _ in range(3):
+                          data, _ = get(url)
+                          out += [t["name"] for t in data.get("results", [])]
+                          url = data.get("next")
+                          if not url:
+                              break
+                      return out
+                  url = f"https://{registry}/v2/{repo}/tags/list?n=1000"
+                  try:
+                      data, _ = get(url)
+                  except urllib.error.HTTPError as e:
+                      if e.code != 401:
+                          raise
+                      ch = dict(re.findall(r'(\w+)="([^"]*)"', e.headers.get("WWW-Authenticate", "")))
+                      q = urllib.parse.urlencode({k: v for k, v in ch.items() if k in ("service", "scope")})
+                      tok, _ = get(f"{ch['realm']}?{q}")
+                      data, _ = get(url, tok.get("token") or tok.get("access_token"))
+                  return data.get("tags") or []
+              except Exception:
+                  return None
+
+          VER = re.compile(r"^(v?)(\d+(?:\.\d+)*)(.*)$")
+          UNSTABLE = re.compile(r"rc|alpha|beta|dev|preview|nightly|canary|snapshot", re.I)
+
+          def newest(tag, tags):
+              m = VER.match(tag)
+              if tag == "latest" or not m:
+                  return None, "floating tag (no version to compare)"
+              shape = (m.group(1), len(m.group(2).split(".")), m.group(3))
+              cands = []
+              for t in tags:
+                  mm = VER.match(t)
+                  if mm and (mm.group(1), len(mm.group(2).split(".")), mm.group(3)) == shape and not UNSTABLE.search(mm.group(3)):
+                      cands.append((tuple(int(x) for x in mm.group(2).split(".")), t))
+              if not cands:
+                  return None, "no comparable tags"
+              best = max(cands)
+              now = tuple(int(x) for x in m.group(2).split("."))
+              return best[1], ("up to date" if best[0] <= now else f"update available: {best[1]}")
+
+          rows = []
+          for ref in sorted(refs)[:60]:
+              registry, repo, tag, digest = parse(ref)
+              tags = tags_of(registry, repo)
+              if tags is None:
+                  rows.append({"image": ref, "status": "not on a public registry (built locally?)", "where": sorted(refs[ref])})
+                  continue
+              latest, status = newest(tag, tags)
+              vulns = fixable = None
+              try:
+                  out = subprocess.run(["docker", "run", "--rm", "-v", "trivy-cache:/root/.cache", TRIVY, "image",
+                                        "--scanners", "vuln", "--severity", "HIGH,CRITICAL", "--format", "json",
+                                        "--quiet", "--timeout", "15m", ref],
+                                       capture_output=True, text=True, timeout=1000)
+                  found = [v for r in (json.loads(out.stdout or "{}").get("Results") or []) for v in (r.get("Vulnerabilities") or [])]
+                  vulns, fixable = len(found), sum(1 for v in found if v.get("FixedVersion"))
+              except Exception:
+                  pass
+              rows.append({"image": ref, "tag": tag, "pinned_digest": bool(digest), "newest_stable": latest,
+                           "status": status, "high_critical": vulns, "fixable": fixable, "where": sorted(refs[ref])})
+
+          json.dump(rows, open("third-party-images.json", "w"), indent=1)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write(f"### Third-party images: {len(rows)} (images this repo builds are left out)\n\n")
+              s.write("| image | newest stable | status | HIGH/CRITICAL (fixable) | used in |\n|---|---|---|---|---|\n")
+              for r in rows:
+                  hc = "-" if r.get("high_critical") is None else f"{r['high_critical']} ({r['fixable']})"
+                  s.write(f"| `{r['image']}` | {r.get('newest_stable') or '-'} | {r['status']} | {hc} | {r['where'][0]}"
+                          f"{' +' + str(len(r['where']) - 1) if len(r['where']) > 1 else ''} |\n")
+          print(f"{len(rows)} third-party images reported")
+          PY
+      - name: Keep the report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: third-party-images
+          path: third-party-images.json
