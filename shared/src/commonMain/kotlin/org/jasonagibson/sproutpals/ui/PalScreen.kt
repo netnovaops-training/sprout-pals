@@ -347,7 +347,7 @@ private val HOW_TO = listOf(
     "HIGHER/LOWER\n\nWill the next\nnumber be...\nA: HIGHER\nC: LOWER\n5 rounds",
     "PLANT & HARVEST\n\nA ◀  move  ▶ C\nB: pick when the\nmeter hits gold!\nRipe = 1  Gold = 2\nDon't let them rot",
     "21\n\nBeat your pal to 21!\nA: another card\nB: stay\nC: cash out\nOver 21 = bust\n5 hands",
-    "SLOTS\n\nA: pull the lever\nB: hold a reel\n(it stays 2 pulls)\nC: cash out\n3 alike = 5\n3 stars = 10",
+    "SLOTS\n\nA: pull (10★ each)\nB: hold a reel\n(it stays 2 pulls)\nC: leave\npair 20  3 alike 50\n3 stars 100",
     "SCARE THE CROWS\n\nA ◀  move  ▶ C\nB: wave them off\nbefore they peck!\n5 pecks = out",
 )
 
@@ -363,8 +363,9 @@ private fun GameHintStrip(g: MiniGame) {
         is TwentyOne -> g.callout.ifBlank { "A: CARD  B: STAY  C: CASH OUT" } + "   ${g.played + if (g.callout.isBlank()) 1 else 0}/${g.hands}"
         is Slots -> when {
             g.spinning() -> "SPINNING..."
-            g.lastWin > 0 -> "WIN +${g.lastWin}!   PULLS ${g.pullsLeft}"
-            else -> "A: PULL  B: HOLD  C: CASH OUT   ${g.pullsLeft}"
+            g.needStars -> "NEED 10★ TO PULL   C: LEAVE   ★${g.stars}"
+            g.lastWin > 0 -> "WIN +${g.lastWin}!   ★${g.stars}"
+            else -> "A: PULL 10★  B: HOLD  C: LEAVE   ★${g.stars}"
         }
         is ScareCrows -> "A◀ ▶C  B: SHOO!   ★${g.score}  ✕${g.pecks}/${g.maxPecks}  ⏱${g.timeLeft / 8}"
     }

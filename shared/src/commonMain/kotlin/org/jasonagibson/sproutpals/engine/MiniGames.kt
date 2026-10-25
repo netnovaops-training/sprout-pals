@@ -6,7 +6,7 @@ import kotlin.random.Random
  * The Play menu's mini-games, as pure rules (no drawing, no Android) so they can be tested.
  * The screen calls step() 8 times a second and passes the three buttons through:
  *   A = left / higher / move,  B = the action (jump, place, ...),  C = right / lower.
- * The table games (21, SLOTS) have nothing to move, so there A deals or pulls and C cashes out.
+ * The table games (21, SLOTS) have nothing to move, so there A deals or pulls and C cashes out (SLOTS: leaves).
  * Every game ends on its own (time, a miss, a win) and reports a score; the app turns the
  * score into points and a happier pet. Playing is always allowed - even with full hearts.
  */
@@ -27,14 +27,15 @@ sealed class MiniGame(val title: String) {
 
     companion object {
         val NAMES = listOf("FRUIT CATCH", "JUMP ROPE", "TIC-TAC-TOE", "HIGHER/LOWER", "PLANT & HARVEST", "21", "SLOTS", "SCARE THE CROWS")
-        fun start(index: Int, rng: Random): MiniGame = when (index) {
+        /** [stars] is the player's balance; only SLOTS spends it. */
+        fun start(index: Int, rng: Random, stars: Int = 0): MiniGame = when (index) {
             0 -> FruitCatch(rng)
             1 -> JumpRope()
             2 -> TicTacToe(rng)
             3 -> HigherLower(rng)
             4 -> PlantHarvest(rng)
             5 -> TwentyOne(rng)
-            6 -> Slots(rng)
+            6 -> Slots(rng, stars)
             else -> ScareCrows(rng)
         }
     }
@@ -374,18 +375,33 @@ class TwentyOne(private val rng: Random) : MiniGame("21") {
 }
 
 /**
- * A garden slot machine, free to play: ten pulls. A pulls the lever; B holds a reel (each press
- * moves the hold to the next reel, then off). A held reel stays put for the next 2 pulls, then
- * lets go, and needs one free pull before anything can be held again. C cashes out.
- * Three of a kind pays 5 (three stars 10), any pair 1; bugs never pay.
+ * A garden slot machine. Each pull (A) costs 10 stars out of the player's stars; under 10, A does
+ * nothing and the screen says so. B holds a reel (each press moves the hold to the next reel,
+ * then off). A held reel stays put for the next 2 pulls, then lets go, and needs one free pull
+ * before anything can be held again. C leaves.
+ * Pays per pull: any pair 20, three alike 50, three stars 100; bugs never pay.
+ *
+ * The result of a pull is decided the moment the lever is pulled, so the cost and the prize move
+ * together as ONE change ([takeDelta]); the app applies it to the save in a single commit
+ * (never "deduct now, pay later", which is how a save race could eat stars).
  */
-class Slots(private val rng: Random) : MiniGame("SLOTS") {
+class Slots(private val rng: Random, stars: Int = 0) : MiniGame("SLOTS") {
     val reels = IntArray(3) { roll() }
     /** Frames each reel keeps spinning (0 = stopped). */
     val spin = IntArray(3)
-    val pulls = 10
-    var pullsLeft = pulls
+    private val finalReels = IntArray(3)
+    /** The player's stars as this game sees them (start + net of every pull). */
+    var stars = stars
         private set
+    /** Net stars won or lost over the whole game. */
+    var net = 0
+        private set
+    /** True after a pull was refused for lack of stars; cleared by the next good pull. */
+    var needStars = false
+        private set
+    private var delta = 0
+    private var pullsMade = 0
+    private var pendingWin = 0
     /** The reel being held (0-2) or -1, and how many more pulls it stays held. */
     var held = -1
         private set
@@ -396,16 +412,26 @@ class Slots(private val rng: Random) : MiniGame("SLOTS") {
         private set
     /** False right after a hold runs out, until one pull without a hold. */
     private var canHold = true
-    private var endIn = 0
 
-    override val result get() = "WON $score IN THE SLOTS!"
+    override val result get() = if (net >= 0) "SLOTS: UP $net ★!" else "SLOTS: DOWN ${-net} ★"
+    /** The stars already moved pull by pull, so the end card adds nothing. */
+    override fun points() = 0
 
     fun spinning() = spin.any { it > 0 }
 
+    /** Stars changed since the last call (cost and prize of any pulls); the app commits it at once. */
+    fun takeDelta(): Int = delta.also { delta = 0 }
+
     override fun a() {
-        if (over || spinning() || pullsLeft == 0) return
-        pullsLeft--
+        if (over || spinning()) return
+        if (stars < COST) { needStars = true; return }
+        needStars = false
+        pullsMade++
         lastWin = 0
+        for (i in 0..2) finalReels[i] = if (i == held) reels[i] else roll()
+        val win = payout(finalReels[0], finalReels[1], finalReels[2])
+        pendingWin = win
+        stars += win - COST; net += win - COST; delta += win - COST; score = net.coerceAtLeast(0)
         for (i in 0..2) if (i != held) spin[i] = 8 + 4 * i      // the reels stop left to right
         if (held < 0) canHold = true
         else if (--holdPulls == 0) { held = -1; canHold = false }
@@ -413,7 +439,7 @@ class Slots(private val rng: Random) : MiniGame("SLOTS") {
 
     override fun b() {
         // only between pulls, after the first one, and a hold can't be moved once it has been used
-        if (over || spinning() || pullsLeft == pulls || pullsLeft == 0 || !canHold) return
+        if (over || spinning() || pullsMade == 0 || !canHold) return
         if (held >= 0 && holdPulls < HOLD_PULLS) return
         held = if (held == 2) -1 else held + 1
         holdPulls = if (held >= 0) HOLD_PULLS else 0
@@ -423,21 +449,19 @@ class Slots(private val rng: Random) : MiniGame("SLOTS") {
 
     override fun step() {
         if (over) return
-        if (endIn > 0) { if (--endIn == 0) over = true; return }
         if (!spinning()) return
-        for (i in 0..2) if (spin[i] > 0) { spin[i]--; reels[i] = roll() }
-        if (!spinning()) {
-            lastWin = payout(reels[0], reels[1], reels[2])
-            score += lastWin
-            if (pullsLeft == 0) endIn = 16          // let the last result show before the card
-        }
+        for (i in 0..2) if (spin[i] > 0) { spin[i]--; reels[i] = if (spin[i] == 0) finalReels[i] else roll() }
+        if (!spinning()) lastWin = pendingWin
     }
 
-    /** Stars and bugs are rarer than the four crops. */
-    private fun roll() = when (rng.nextInt(10)) {
-        in 0..7 -> rng.nextInt(4)
-        8 -> STAR
-        else -> BUG
+    /** Out of 100: four crops 19 each, star 8, bug 16 - bugs and stars rarer than crops. */
+    private fun roll(): Int {
+        val n = rng.nextInt(100)
+        return when {
+            n < 76 -> n / 19
+            n < 84 -> STAR
+            else -> BUG
+        }
     }
 
     companion object {
@@ -445,11 +469,13 @@ class Slots(private val rng: Random) : MiniGame("SLOTS") {
         const val STAR = 4
         const val BUG = 5
         const val HOLD_PULLS = 2
+        /** Stars a pull costs. */
+        const val COST = 10
 
         fun payout(a: Int, b: Int, c: Int): Int = when {
-            a == b && b == c -> when (a) { STAR -> 10; BUG -> 0; else -> 5 }
-            a == b || a == c -> if (a == BUG) 0 else 1
-            b == c -> if (b == BUG) 0 else 1
+            a == b && b == c -> when (a) { STAR -> 100; BUG -> 0; else -> 50 }
+            a == b || a == c -> if (a == BUG) 0 else 20
+            b == c -> if (b == BUG) 0 else 20
             else -> 0
         }
     }

@@ -355,7 +355,13 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
     private fun startGame(index: Int) {
         panel = Panel.None
         selected = -1
-        mini = MiniGame.start(index, rng)
+        mini = MiniGame.start(index, rng, save.points)
+    }
+
+    /** SLOTS moves stars on every pull: its cost and prize land in the save as ONE commit. */
+    private fun settleSlots(g: MiniGame) {
+        val d = (g as? org.jasonagibson.sproutpals.engine.Slots)?.takeDelta() ?: return
+        if (d != 0) commit(save.copy(points = (save.points + d).coerceAtLeast(0)))
     }
 
     /**
@@ -369,7 +375,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         commit(save.copy(pet = PetEngine.played(pet), points = save.points + earned))
         onSound(if (earned > 0) Sfx.HATCH else Sfx.C)
         panel = Panel.GameOver(
-            "${g.result}\n\n+$earned ★" + if (happier) "\n+1 ♥" else "",
+            "${g.result}" + (if (g is org.jasonagibson.sproutpals.engine.Slots) "" else "\n\n+$earned ★") + if (happier) "\n+1 ♥" else "",
         )
         count("play")
         count(
@@ -388,7 +394,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
 
     /** A: next icon, or next choice inside a panel. */
     fun pressA() {
-        mini?.let { it.a(); return }
+        mini?.let { it.a(); settleSlots(it); return }
         when (val p = panel) {
             is Panel.PlayMenu -> panel = p.copy(choice = (p.choice + 1) % MiniGame.NAMES.size)
             is Panel.Shop -> panel = p.copy(choice = (p.choice + 1) % Shop.items(p.tab, save).size, note = "")
