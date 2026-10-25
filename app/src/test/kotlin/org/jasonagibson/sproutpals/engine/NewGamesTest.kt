@@ -49,11 +49,12 @@ class NewGamesTest {
 
     // ---------- SLOTS ----------
 
-    @Test fun `slots pay 5 for three alike, 10 for three stars, 1 for a pair, never for bugs`() {
-        assertEquals(5, Slots.payout(0, 0, 0))
-        assertEquals(10, Slots.payout(Slots.STAR, Slots.STAR, Slots.STAR))
-        assertEquals(1, Slots.payout(2, 3, 2))
-        assertEquals(1, Slots.payout(3, 1, 1))
+    @Test fun `slots pay 20 for a pair, 50 for three alike, 100 for three stars, never for bugs`() {
+        assertEquals(50, Slots.payout(0, 0, 0))
+        assertEquals(100, Slots.payout(Slots.STAR, Slots.STAR, Slots.STAR))
+        assertEquals(20, Slots.payout(2, 3, 2))
+        assertEquals(20, Slots.payout(3, 1, 1))
+        assertEquals(20, Slots.payout(Slots.STAR, Slots.STAR, 1))
         assertEquals(0, Slots.payout(Slots.BUG, Slots.BUG, Slots.BUG))
         assertEquals(0, Slots.payout(Slots.BUG, 1, Slots.BUG))
         assertEquals(0, Slots.payout(0, 1, 2))
@@ -62,7 +63,7 @@ class NewGamesTest {
     private fun spinOut(g: Slots) { var n = 0; while (g.spinning() && n++ < 100) g.step() }
 
     @Test fun `a held reel stays put for two pulls, then lets go and can't be held right away`() {
-        val g = Slots(Random(5))
+        val g = Slots(Random(5), 1_000)
         g.b()
         assertEquals("no hold before the first pull", -1, g.held)
         g.a(); spinOut(g)
@@ -85,16 +86,58 @@ class NewGamesTest {
         assertEquals(0, g.held)
     }
 
-    @Test fun `slots end after ten pulls, or when C cashes out`() {
-        val g = Slots(Random(6))
-        var steps = 0
-        while (!g.over && steps < 5_000) { if (!g.spinning()) g.a(); g.step(); steps++ }
+    @Test fun `can't pull under 10 stars - nothing moves and the screen is told`() {
+        val g = Slots(Random(6), 9)
+        g.a()
+        assertFalse(g.spinning())
+        assertTrue(g.needStars)
+        assertEquals(0, g.takeDelta())
+        assertEquals(9, g.stars)
+    }
+
+    @Test fun `a pull takes 10 and pays at once as one change`() {
+        val g = Slots(Random(11), 100)
+        var balance = 100
+        repeat(40) {
+            if (g.stars < 10) return@repeat
+            g.a()
+            val d = g.takeDelta()
+            assertEquals(balance + d, g.stars)
+            assertTrue("net of cost and prize", d == -10 || d == 10 || d == 40 || d == 90)
+            balance = g.stars
+            spinOut(g)
+            assertEquals("the screen shows what was paid", d + 10, g.lastWin)
+            assertEquals(balance, g.stars)
+        }
+        assertEquals("the exact 10 stars leaves 0 and still pulls", true, Slots(Random(1), 10).also { it.a() }.spinning())
+    }
+
+    @Test fun `C leaves, and the end card adds no stars on top`() {
+        val g = Slots(Random(7), 50)
+        g.c()
         assertTrue(g.over)
-        assertEquals(0, g.pullsLeft)
-        assertTrue(g.points() in 0..10)
-        val quit = Slots(Random(7))
-        quit.c()
-        assertTrue(quit.over)
+        assertEquals(0, g.points())
+    }
+
+    @Test fun `100000 pulls return a bit under what they cost`() {
+        for (hold in listOf(false, true)) {
+            val g = Slots(Random(2026), Int.MAX_VALUE / 2)
+            val start = g.stars.toLong()
+            val pulls = 100_000
+            repeat(pulls) {
+                g.a(); spinOut(g)
+                // the hold plan: after a pull, keep a reel that shows a star, else any reel beside a match
+                if (hold && g.held < 0) {
+                    val r = g.reels
+                    val pick = when { r[0] == r[1] || r[0] == r[2] -> 0; r[1] == r[2] -> 1; else -> -1 }
+                    if (pick >= 0 && r[pick] != Slots.BUG) { repeat(pick + 1) { g.b() } }
+                }
+            }
+            val paid = g.stars - start + pulls * 10L
+            val avgPer10 = paid.toDouble() / pulls
+            println("SLOTS RETURN hold=$hold: ${"%.2f".format(avgPer10)} stars back per 10 spent (${"%.1f".format(avgPer10 * 10)}%)")
+            assertTrue("hold=$hold returned $avgPer10", avgPer10 < 10.0 && avgPer10 > 8.0)
+        }
     }
 
     // ---------- SCARE THE CROWS ----------
