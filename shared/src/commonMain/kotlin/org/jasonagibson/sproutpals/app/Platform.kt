@@ -41,6 +41,7 @@ data class UpdateInfo(
     val versionCode: Int,
     val versionName: String,
     val url: String,
-    val md5: String,
+    /** SHA-256 of the APK, from the manifest. (The manifest also has an md5, only for apps before 0.14.) */
+    val sha256: String,
     val notes: String,
 )

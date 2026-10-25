@@ -57,7 +57,7 @@ class Updater {
                 versionCode = code,
                 versionName = json.optString("versionName"),
                 url = json.optString("url").ifBlank { DEFAULT_APK },
-                md5 = json.optString("md5"),
+                sha256 = json.optString("sha256"),
                 notes = json.optString("notes"),
             )
         } catch (_: Exception) {
@@ -75,8 +75,10 @@ class Updater {
      * VERIFIES THE CHECKSUM BEFORE INSTALLING. A truncated download is a
      * corrupt APK, and Android's installer reports that as a generic parse
      * failure that looks like a bad build rather than a bad transfer. The
-     * manifest carries the md5 of the exact file the release script published,
+     * manifest carries the SHA-256 of the exact file the release script published,
      * so a mismatch is caught here with a sentence that says what happened.
+     * (It used to be MD5, which is too weak to trust for this: two different files
+     * can be made to share an MD5. No SHA-256 in the manifest = no install.)
      */
     suspend fun downloadAndInstall(
         context: Context,
@@ -98,8 +100,11 @@ class Updater {
             if (conn.responseCode !in 200..299) {
                 throw IllegalStateException("The download failed (${conn.responseCode}).")
             }
+            if (update.sha256.length != 64) {
+                throw IllegalStateException("This update has no checksum to check it against, so it was not installed.")
+            }
             val total = conn.contentLengthLong
-            val digest = MessageDigest.getInstance("MD5")
+            val digest = MessageDigest.getInstance("SHA-256")
 
             conn.inputStream.use { input ->
                 target.outputStream().use { out ->
@@ -116,7 +121,7 @@ class Updater {
             }
 
             val got = digest.digest().joinToString("") { "%02x".format(it) }
-            if (update.md5.isNotBlank() && !got.equals(update.md5, ignoreCase = true)) {
+            if (!got.equals(update.sha256, ignoreCase = true)) {
                 target.delete()
                 throw IllegalStateException(
                     "The download did not arrive intact, so it was not installed. Try again."
