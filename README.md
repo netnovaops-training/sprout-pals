@@ -10,6 +10,11 @@ Lives run in real time: three days each as a baby, kid and adult, then old age, 
 in all. Neglect can end a life early, the classic way. When a pet returns to the garden a memory
 card is kept and a new egg appears.
 
+## Install
+
+Android and iPhone downloads are on the [Releases page](https://github.com/netnovaops-training/sprout-pals/releases).
+Step-by-step instructions for both are in [INSTALL.md](INSTALL.md).
+
 ## What's in here
 
 | Folder | What |
