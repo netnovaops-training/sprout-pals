@@ -65,10 +65,10 @@ dependencies {
     // build tools in the top-level build.gradle.kts: same minimum versions, same security reasons.
     // Lint only runs on the build machine; none of this ships in the app.
     constraints {
-        add("androidLintTool", "org.bouncycastle:bcprov-jdk18on:1.86")
-        add("androidLintTool", "org.bouncycastle:bcpkix-jdk18on:1.86")
-        add("androidLintTool", "org.bouncycastle:bcutil-jdk18on:1.86")
-        add("androidLintTool", "org.apache.commons:commons-lang3:3.21.0")
+        add("androidLintTool", "org.bouncycastle:bcprov-jdk18on:1.87")
+        add("androidLintTool", "org.bouncycastle:bcpkix-jdk18on:1.87")
+        add("androidLintTool", "org.bouncycastle:bcutil-jdk18on:1.87")
+        add("androidLintTool", "org.apache.commons:commons-lang3:3.22.0")
         add("androidLintTool", "org.apache.httpcomponents:httpclient:4.5.14")
     }
     implementation(platform(libs.androidx.compose.bom))
