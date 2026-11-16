@@ -10,7 +10,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 RUN cargo build --release --locked
 
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 RUN useradd --system --uid 10001 --home-dir /data sprout && mkdir -p /data && chown sprout /data
 COPY --from=builder /build/target/release/sprout-server /usr/local/bin/sprout-server
 USER sprout
