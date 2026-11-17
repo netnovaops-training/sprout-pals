@@ -1,0 +1,71 @@
+# Nightly merge of SAFE Dependabot pull requests, 03:00 New York time (08:00 UTC in winter, 07:00 UTC in summer).
+# Jason, 2026-11-17: review dependencies while he is away; merge the safe ones at 3 a.m.
+#
+# Merges a pull request only when ALL of these hold:
+#   - opened by Dependabot
+#   - at least one check ran, and every check ended SUCCESS, NEUTRAL or SKIPPED (none pending or failed)
+#   - it is a digest-only bump (`abc` to `def`) or a grouped "minor-and-patch" update
+#   - it does NOT change the version of a language runtime or database image (python, node, postgres,
+#     mysql, mariadb, ruby, golang, rust, openjdk): those can change behaviour while every check stays green
+# Everything else stays open for Jason, and the run summary lists why each one was skipped.
+# Uses only the gh CLI that is already on the runner (no third-party actions).
+name: dependabot-nightly-merge
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-nightly-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Merge the safe ones
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          echo "### Dependabot nightly merge" >> "$GITHUB_STEP_SUMMARY"
+          gh pr list -R "$REPO" --author app/dependabot --state open --limit 50 \
+            --json number,title,statusCheckRollup > prs.json
+          python3 - <<'PY' > plan.tsv
+          import json, re
+          RUNTIME = re.compile(r"\b(python|node|postgres|mysql|mariadb|ruby|golang|rust|openjdk)\b from [0-9]", re.I)
+          for pr in json.load(open("prs.json")):
+              t = pr["title"]
+              states = [c.get("conclusion") or c.get("state") or "PENDING" for c in pr.get("statusCheckRollup") or []]
+              if not states:
+                  why = "no checks ran"
+              elif any(s not in ("SUCCESS", "NEUTRAL", "SKIPPED") for s in states):
+                  why = "checks not all green"
+              elif "SUCCESS" not in states:
+                  why = "no check succeeded"
+              elif RUNTIME.search(t):
+                  why = "runtime/database version change - for Jason"
+              elif re.search(r"from `[0-9a-f]+` to `[0-9a-f]+`", t) or "minor-and-patch" in t:
+                  why = "MERGE"
+              else:
+                  why = "not a digest or minor/patch group - for Jason"
+              print(f"{pr['number']}\t{why}\t{t}")
+          PY
+          while IFS="$(printf '\t')" read -r num why title; do
+            if [ "$why" = "MERGE" ]; then
+              if gh pr merge "$num" -R "$REPO" --squash --delete-branch; then
+                echo "- merged #$num: $title" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "- FAILED to merge #$num: $title" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "- left #$num ($why): $title" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done < plan.tsv
