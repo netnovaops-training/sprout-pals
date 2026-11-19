@@ -15,7 +15,7 @@ buildscript {
             // AGP 9.5.1 brings guava 33.4.0-jre (checked with ./gradlew buildEnvironment, 2026-11-19).
             // Dependabot cannot raise a transitive version itself (its security update job failed with
             // security_update_dependency_not_found), so the constraint does it here.
-            classpath("com.google.guava:guava:33.7.2-jre") { because("uncontrolled memory allocation on deserialization, fixed in 33.7.2") }
+            classpath("com.google.guava:guava:33.8.0-jre") { because("uncontrolled memory allocation on deserialization, fixed in 33.7.2") }
         }
     }
 }
