@@ -70,6 +70,8 @@ dependencies {
         add("androidLintTool", "org.bouncycastle:bcutil-jdk18on:1.87")
         add("androidLintTool", "org.apache.commons:commons-lang3:3.22.0")
         add("androidLintTool", "org.apache.httpcomponents:httpclient:4.5.14")
+        // lint's copy was guava 33.4.0-jre too (./gradlew :app:dependencies, 2026-11-19)
+        add("androidLintTool", "com.google.guava:guava:33.7.2-jre")
     }
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

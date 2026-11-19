@@ -438,8 +438,11 @@ class Slots(private val rng: Random, stars: Int = 0) : MiniGame("SLOTS") {
     }
 
     override fun b() {
-        // only between pulls, after the first one, and a hold can't be moved once it has been used
-        if (over || spinning() || pullsMade == 0 || !canHold) return
+        // only between pulls, after the first one, and a hold can't be moved once it has been used.
+        // (Split in two from one 4-part condition for detekt ComplexCondition, 2026-11-19: same
+        // early return, same order of checks; the NewGamesTest slots tests pass unchanged.)
+        if (over || spinning()) return
+        if (pullsMade == 0 || !canHold) return
         if (held >= 0 && holdPulls < HOLD_PULLS) return
         held = if (held == 2) -1 else held + 1
         holdPulls = if (held >= 0) HOLD_PULLS else 0

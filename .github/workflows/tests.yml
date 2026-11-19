@@ -26,6 +26,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check the Gradle wrapper jar is a real Gradle release
+        # gradle/wrapper/gradle-wrapper.jar is the one binary in the repo (OpenSSF Scorecard
+        # BinaryArtifacts). This compares its checksum with every official Gradle wrapper, so a
+        # swapped jar fails here before ./gradlew runs it. Checked by hand 2026-11-19: the jar
+        # matches gradle-9.9.1-wrapper.jar.sha256 from services.gradle.org.
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Set up Java 17
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:

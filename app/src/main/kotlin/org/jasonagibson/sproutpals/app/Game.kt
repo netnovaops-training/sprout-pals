@@ -18,6 +18,7 @@ import org.jasonagibson.sproutpals.engine.Save
 import org.jasonagibson.sproutpals.engine.Stage
 import org.jasonagibson.sproutpals.engine.Route
 import org.jasonagibson.sproutpals.engine.Shop
+import org.jasonagibson.sproutpals.engine.ShopItem
 import org.jasonagibson.sproutpals.engine.ShopResult
 import org.jasonagibson.sproutpals.engine.ShopTab
 import org.jasonagibson.sproutpals.engine.Steps
@@ -491,18 +492,7 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
         val choice = p.choice.coerceAtMost(left - 1)
         val wear = item.tab == ShopTab.OUTFITS
         val note = when (result) {
-            ShopResult.BOUGHT -> {
-                onSound(Chiptune.Sfx.ARRIVE)
-                if (!item.repeatable) count("buy")
-                if (!item.repeatable && !item.daily) count("own:${item.id}")
-                if (item.repeatable && next.mysteryCount >= Shop.MAX_REPEAT) count("secret_charm")
-                when {
-                    item.repeatable -> "?????"
-                    item.daily -> "ON GUARD UNTIL MIDNIGHT!"
-                    wear -> "YOURS! WEARING IT"
-                    else -> "YOURS! IT'S IN YOUR GARDEN"
-                }
-            }
+            ShopResult.BOUGHT -> bought(item, next, wear)
             ShopResult.ACTIVE -> "ALREADY ON GUARD TODAY"
             ShopResult.SHOWN -> if (wear) "WEARING IT" else "OUT IN THE GARDEN"
             ShopResult.HIDDEN -> "PUT AWAY FOR NOW"
@@ -510,6 +500,22 @@ class Game(initial: Save, private val persist: (Save) -> Unit) {
             ShopResult.MAXED -> "????!"
         }
         panel = p.copy(choice = choice, note = note)
+    }
+
+    /** A purchase went through: sound, achievement counts, and the shop note to show.
+     *  Moved out of [shopPress] unchanged for detekt CyclomaticComplexMethod (2026-11-19);
+     *  the shop and achievement unit tests pass the same before and after. */
+    private fun bought(item: ShopItem, next: Save, wear: Boolean): String {
+        onSound(Chiptune.Sfx.ARRIVE)
+        if (!item.repeatable) count("buy")
+        if (!item.repeatable && !item.daily) count("own:${item.id}")
+        if (item.repeatable && next.mysteryCount >= Shop.MAX_REPEAT) count("secret_charm")
+        return when {
+            item.repeatable -> "?????"
+            item.daily -> "ON GUARD UNTIL MIDNIGHT!"
+            wear -> "YOURS! WEARING IT"
+            else -> "YOURS! IT'S IN YOUR GARDEN"
+        }
     }
 
     // ---------- garden ----------
