@@ -1,62 +1,43 @@
-# Dependabot version updates, once a week (Monday 05:00 Pacific). Minor and patch updates of one folder
-# arrive together in a single pull request; a major update is its own pull request. The checks in
-# .github/workflows run on each pull request before it is merged.
+# One Dependabot PR per repo per month: every ecosystem in one multi-ecosystem group,
+# 00:00 New York on the 1st (before the 6 AM pull). Owner's rule 2026-11-19: few, large PRs.
+# Made by Scratchpad tools/dependabot_one_pr.py; edit the ecosystem list here, keep the group.
 version: 2
-
+multi-ecosystem-groups:
+  all-dependencies:
+    schedule:
+      interval: monthly
+      time: "00:00"
+      timezone: America/New_York
 updates:
-  - package-ecosystem: gradle
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "00:00"
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    labels: [dependencies, android]
-    groups:
-      gradle-minor-and-patch:
-        update-types: [minor, patch]
-
-  - package-ecosystem: cargo
-    directory: /server
-    schedule:
-      interval: weekly
-      day: monday
-      time: "00:00"
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    labels: [dependencies, rust]
-    groups:
-      cargo-minor-and-patch:
-        update-types: [minor, patch]
-
-  # The game server's base images (FROM lines). The pull request's build and tests are the
-  # compatibility check; code-health.yml reports versions and vulnerabilities daily.
-  - package-ecosystem: docker
-    directory: /server
-    # wait a week after a version is published: brand-new releases are where bad packages hide
-    cooldown:
-      default-days: 7
-    schedule:
-      interval: weekly
-      day: monday
-      time: "00:00"
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    labels: [dependencies, docker]
-    groups:
-      docker-minor-and-patch:
-        update-types: [minor, patch]
-
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "00:00"
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    labels: [dependencies, github-actions]
-    groups:
-      actions-minor-and-patch:
-        update-types: [minor, patch]
+- package-ecosystem: gradle
+  directory: /
+  labels:
+  - dependencies
+  - android
+  patterns:
+  - '*'
+  multi-ecosystem-group: all-dependencies
+- package-ecosystem: cargo
+  directory: /server
+  labels:
+  - dependencies
+  - rust
+  patterns:
+  - '*'
+  multi-ecosystem-group: all-dependencies
+- package-ecosystem: docker
+  directory: /server
+  labels:
+  - dependencies
+  - docker
+  patterns:
+  - '*'
+  multi-ecosystem-group: all-dependencies
+- package-ecosystem: github-actions
+  directory: /
+  labels:
+  - dependencies
+  - github-actions
+  patterns:
+  - '*'
+  multi-ecosystem-group: all-dependencies
