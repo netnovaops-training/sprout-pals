@@ -13,7 +13,9 @@ RUN cargo build --release --locked
 FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 RUN useradd --system --uid 10001 --home-dir /data sprout && mkdir -p /data && chown sprout /data
 COPY --from=builder /build/target/release/sprout-server /usr/local/bin/sprout-server
-USER sprout
+# The numeric uid of the "sprout" user made above (Hadolint DL3066: a name may not resolve on the
+# host, e.g. for volume ownership checks). Same user as before, so existing /data volumes still fit.
+USER 10001
 ENV SPROUT_DB=/data/sprout.db PORT=8020 BIND=0.0.0.0
 EXPOSE 8020
 # the database lives in a volume mounted here, so a new image never loses friends or hearts

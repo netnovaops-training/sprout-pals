@@ -35,11 +35,7 @@
     <ID>LongParameterList:CharacterDraw.kt$( species: Species, stage: Stage, centerX: Float, ground: Float, unitPx: Float, unitsPerPixel: Float, faceLeft: Boolean = false, pose: Int = 0, layers: (ImageBitmap) -&gt; List&lt;ImageBitmap&gt; = { emptyList() }, )</ID>
     <ID>LongParameterList:Critters.kt$(save: Save, f: Int, top: Int, ground: Int, u: Float, headX: Int, headY: Int, night: Boolean)</ID>
     <ID>LongParameterList:GameDraw.kt$(c: Char, x: Int, y: Int, scale: Int, color: Long, u: Float)</ID>
-    <ID>LongParameterList:GameDraw.kt$(g: FruitCatch, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
-    <ID>LongParameterList:GameDraw.kt$(g: HigherLower, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
     <ID>LongParameterList:GameDraw.kt$(g: MiniGame, pet: PetState, frame: Int, top: Int, ground: Int, u: Float)</ID>
-    <ID>LongParameterList:GameDraw.kt$(g: PlantHarvest, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
-    <ID>LongParameterList:GameDraw.kt$(g: TicTacToe, pet: PetState, f: Int, top: Int, ground: Int, u: Float)</ID>
     <ID>LongParameterList:GameDraw.kt$(x: Int, y: Int, w: Int, h: Int, c: Long, u: Float)</ID>
     <ID>LongParameterList:GardenDraw.kt$(save: Save, now: Long, f: Int, ground: Int, px: Float, selected: Int?)</ID>
     <ID>LongParameterList:Lcd.kt$(x: Int, y: Int, w: Int, h: Int, c: Color, px: Float)</ID>

@@ -23,16 +23,23 @@ class NewGamesTest {
     @Test fun `21 plays five hands, the pal draws to 17, and staying always finishes`() {
         for (seed in 1..20) {
             val g = TwentyOne(Random(seed))
-            var steps = 0
-            while (!g.over && steps < 5_000) {
-                if (g.yourTurn()) { if (TwentyOne.total(g.you) < 15) g.a() else g.b() }
-                g.step(); steps++
-                if (g.callout.isNotEmpty() && TwentyOne.total(g.you) <= 21) assertTrue(TwentyOne.total(g.pal) >= 17 || g.pal.size == 2)
-            }
+            playToTheEnd(g)
             assertTrue(g.over)
             assertEquals(5, g.played)
             assertTrue(g.score in 0..15)
             assertTrue(g.points() in 0..10)
+        }
+    }
+
+    /** Takes cards below 15, stays from 15, until the game ends (or 5000 steps), checking on every
+     *  step that a finished hand saw the pal draw to 17. Moved out of the test above for detekt
+     *  NestedBlockDepth (2026-11-19); the loop is unchanged and the test still passes. */
+    private fun playToTheEnd(g: TwentyOne) {
+        var steps = 0
+        while (!g.over && steps < 5_000) {
+            if (g.yourTurn()) { if (TwentyOne.total(g.you) < 15) g.a() else g.b() }
+            g.step(); steps++
+            if (g.callout.isNotEmpty() && TwentyOne.total(g.you) <= 21) assertTrue(TwentyOne.total(g.pal) >= 17 || g.pal.size == 2)
         }
     }
 

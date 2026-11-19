@@ -79,7 +79,12 @@ def sam_cutout(name):
         from rembg import new_session, remove
         if _sam is None:
             _sam = new_session("sam")
-    except Exception:
+    # Was a blind `except Exception` (Ruff BLE001, 2026-11-19). These are the ways "SAM isn't
+    # available" shows up: rembg not installed (ImportError), the model download failing
+    # (requests/pooch errors are OSError subclasses), an unknown model name (ValueError), and
+    # onnxruntime failing to load the model (its errors subclass RuntimeError). Anything else is
+    # a real bug in this script and should stop it, not silently skip the SAM cut-out.
+    except (ImportError, OSError, ValueError, RuntimeError):
         return None
     box, pos, neg, *which = SAM_PROMPTS[name]
     prompt = [{"type": "rectangle", "label": 1, "data": list(box)}]

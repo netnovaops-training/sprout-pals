@@ -33,15 +33,22 @@ private fun DrawScope.pal(pet: PetState, cx: Float, ground: Float, u: Float, pos
     character(pet.species, pet.stage, cx, ground, u, height / img.height, faceLeft = faceLeft, pose = pose)
 }
 
+/** What every mini-game drawer needs besides its game: the pet, the animation frame [f], the top
+ *  of the garden area, where feet stand, and the unit size. One object instead of five parameters
+ *  (detekt LongParameterList, 2026-11-19). Each drawer destructures it on its first line, so the
+ *  drawing code itself is unchanged; the app compiles and the unit tests pass the same. */
+private data class Scene(val pet: PetState, val f: Int, val top: Int, val ground: Int, val u: Float)
+
 fun DrawScope.drawMiniGame(g: MiniGame, pet: PetState, frame: Int, top: Int, ground: Int, u: Float) {
+    val s = Scene(pet, frame, top, ground, u)
     when (g) {
-        is FruitCatch -> fruitCatch(g, pet, frame, top, ground, u)
+        is FruitCatch -> fruitCatch(g, s)
         is JumpRope -> jumpRope(g, pet, frame, ground, u)
-        is TicTacToe -> ticTacToe(g, pet, frame, top, ground, u)
-        is HigherLower -> higherLower(g, pet, frame, top, ground, u)
-        is PlantHarvest -> plantHarvest(g, pet, frame, top, ground, u)
-        is TwentyOne -> twentyOne(g, pet, frame, top, ground, u)
-        is Slots -> slots(g, pet, frame, top, ground, u)
+        is TicTacToe -> ticTacToe(g, s)
+        is HigherLower -> higherLower(g, s)
+        is PlantHarvest -> plantHarvest(g, s)
+        is TwentyOne -> twentyOne(g, s)
+        is Slots -> slots(g, s)
         is ScareCrows -> scareCrows(g, frame, ground, u)
     }
 }
@@ -55,7 +62,8 @@ private fun DrawScope.grid(rows: List<String>, colors: Map<Char, Long>, x: Int, 
 
 private fun plotCenter(i: Int) = 10 + i * 19
 
-private fun DrawScope.plantHarvest(g: PlantHarvest, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+private fun DrawScope.plantHarvest(g: PlantHarvest, s: Scene) {
+    val (pet, f, top, ground, u) = s
     val bedY = ground - 14
     for (i in 0 until g.plots) {
         val cx = plotCenter(i)
@@ -91,7 +99,8 @@ private fun DrawScope.plantHarvest(g: PlantHarvest, pet: PetState, f: Int, top: 
 
 private fun laneCenter(lane: Int) = 8 + lane * 13
 
-private fun DrawScope.fruitCatch(g: FruitCatch, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+private fun DrawScope.fruitCatch(g: FruitCatch, s: Scene) {
+    val (pet, f, top, ground, u) = s
     for (d in g.drops) {
         val x = laneCenter(d.lane) - 3
         val y = top + 4 + d.y
@@ -132,7 +141,8 @@ private fun DrawScope.jumpRope(g: JumpRope, pet: PetState, f: Int, ground: Int, 
 
 // ---------- Tic-Tac-Toe ----------
 
-private fun DrawScope.ticTacToe(g: TicTacToe, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+private fun DrawScope.ticTacToe(g: TicTacToe, s: Scene) {
+    val (pet, f, top, ground, u) = s
     val cell = 13
     val bx = 8; val by = top + 12
     px(bx - 2, by - 2, cell * 3 + 4, cell * 3 + 4, 0xEEFFF8E4, u)
@@ -172,7 +182,8 @@ private fun DrawScope.bigChar(c: Char, x: Int, y: Int, scale: Int, color: Long, 
     g.forEachIndexed { r, row -> row.forEachIndexed { k, ch -> if (ch == '#') px(x + k * scale, y + r * scale, scale, scale, color, u) } }
 }
 
-private fun DrawScope.higherLower(g: HigherLower, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+private fun DrawScope.higherLower(g: HigherLower, s: Scene) {
+    val (pet, f, top, ground, u) = s
     // two cards: the number you see, and the next one (a "?" until you guess)
     for ((i, x) in listOf(12, 50).withIndex()) {
         px(x - 1, top + 9, 32, 34, 0xFF2B2B33, u)
@@ -218,7 +229,8 @@ private fun DrawScope.smallNumber(n: Int, x: Int, y: Int, color: Long, u: Float)
     n.toString().forEachIndexed { i, ch -> bigChar(ch, x + i * 4, y, 1, color, u) }
 }
 
-private fun DrawScope.twentyOne(g: TwentyOne, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+private fun DrawScope.twentyOne(g: TwentyOne, s: Scene) {
+    val (pet, f, top, ground, u) = s
     // the pal's hand on top, yours below; up to 6 cards fit in a row
     g.pal.forEachIndexed { i, r -> playingCard(r, 4 + i * 12, top + 6, faceDown = i == 1 && g.hidden, u) }
     g.you.forEachIndexed { i, r -> playingCard(r, 4 + i * 12, top + 28, faceDown = false, u) }
@@ -251,7 +263,8 @@ private val SLOT_COLORS = mapOf(
     'Y' to 0xFFFFD84AL, 'B' to 0xFF6B4423L, 'K' to 0xFF2B2B33L, 'P' to 0xFF8E4FC9L,
 )
 
-private fun DrawScope.slots(g: Slots, pet: PetState, f: Int, top: Int, ground: Int, u: Float) {
+private fun DrawScope.slots(g: Slots, s: Scene) {
+    val (pet, f, top, ground, u) = s
     // the machine: a wooden cabinet with three windows and a lever on the right
     px(12, top + 4, 70, 36, 0xFF8A5A2E, u)
     px(14, top + 6, 66, 32, 0xFFB5824A, u)

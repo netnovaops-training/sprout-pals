@@ -55,9 +55,14 @@ private val PIECES = linkedMapOf(
     ),
 )
 
-/** Draws every decor piece that's switched on. [night] lights the lantern. The scarecrow also
- *  stands in the garden while a SCARECROW WATCH is on guard ([now] = the game clock). */
-fun DrawScope.drawDecor(save: Save, f: Int, ground: Int, px: Float, night: Boolean, now: Long) {
+/** When the decor is drawn: [now] is the game clock, [night] lights the lantern. Grouped so
+ *  [drawDecor] stays under detekt's LongParameterList limit (2026-11-19); behaviour unchanged. */
+data class DecorTime(val now: Long, val night: Boolean)
+
+/** Draws every decor piece that's switched on. [at].night lights the lantern. The scarecrow also
+ *  stands in the garden while a SCARECROW WATCH is on guard ([at].now = the game clock). */
+fun DrawScope.drawDecor(save: Save, f: Int, ground: Int, px: Float, at: DecorTime) {
+    val (now, night) = at
     for ((id, p) in PIECES) {
         if (!Shop.showing(save, id) && !(id == "scarecrow" && Shop.watching(save, now))) continue
         var grid = p.grid

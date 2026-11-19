@@ -12,6 +12,10 @@ buildscript {
             classpath("org.bitbucket.b_c:jose4j:0.9.7") { because("DoS via compressed JWE, fixed in 0.9.7") }
             classpath("org.jdom:jdom2:2.0.6.1") { because("XXE, fixed in 2.0.6.1") }
             classpath("org.apache.commons:commons-lang3:3.22.0") { because("uncontrolled recursion, fixed in 3.22.0") }
+            // AGP 9.5.1 brings guava 33.4.0-jre (checked with ./gradlew buildEnvironment, 2026-11-19).
+            // Dependabot cannot raise a transitive version itself (its security update job failed with
+            // security_update_dependency_not_found), so the constraint does it here.
+            classpath("com.google.guava:guava:33.7.2-jre") { because("uncontrolled memory allocation on deserialization, fixed in 33.7.2") }
         }
     }
 }
